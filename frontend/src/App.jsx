@@ -19,6 +19,7 @@ import { PaymentSuccessPage } from './pages/payment/PaymentSuccessPage';
 // User portal
 import { CardPage } from './pages/user/CardPage';
 import { HomePage } from './pages/user/HomePage';
+import { VenueDetailPage } from './pages/user/VenueDetailPage';
 import { EntryHistoryPage } from './pages/user/EntryHistoryPage';
 import { ProfilePage } from './pages/user/ProfilePage';
 
@@ -72,6 +73,7 @@ export default function App() {
 
             {/* User portal */}
             <Route path="/home" element={<ProtectedRoute><SubscriptionRoute><HomePage /></SubscriptionRoute></ProtectedRoute>} />
+            <Route path="/venues/:id" element={<ProtectedRoute><SubscriptionRoute><VenueDetailPage /></SubscriptionRoute></ProtectedRoute>} />
             <Route path="/card" element={<ProtectedRoute><SubscriptionRoute><CardPage /></SubscriptionRoute></ProtectedRoute>} />
             <Route path="/entries" element={<ProtectedRoute><SubscriptionRoute><EntryHistoryPage /></SubscriptionRoute></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />

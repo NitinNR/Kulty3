@@ -47,6 +47,10 @@ body {
   100% { left: 100%; }
 }
 
+/* Hide scrollbar for horizontal category pills */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* Scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;
