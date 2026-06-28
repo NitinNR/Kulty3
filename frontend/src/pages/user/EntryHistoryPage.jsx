@@ -37,6 +37,14 @@ export const EntryHistoryPage = () => {
     fetchEntries();
   }, []);
 
+  const toBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
   const handleBillUpload = async () => {
     if (!billImage || !billAmount) {
       toast?.showError('Please select an image and enter amount');
@@ -45,11 +53,8 @@ export const EntryHistoryPage = () => {
 
     try {
       setUploading(true);
-      const formData = new FormData();
-      formData.append('image', billImage);
-      formData.append('amount', billAmount);
-
-      await uploadBill(selectedEntry._id, formData);
+      const imageUrl = await toBase64(billImage);
+      await uploadBill(selectedEntry._id, { imageUrl, amount: Number(billAmount) });
       toast?.showSuccess('Bill uploaded successfully');
 
       setEntries(entries.map(e =>

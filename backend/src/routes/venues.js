@@ -36,6 +36,16 @@ router.get('/', optionalAuth, async (req, res) => {
   }
 });
 
+// Venue owner fetches their own venue(s)
+router.get('/my/venue', authenticateToken, requireRole(['venue_owner']), async (req, res) => {
+  try {
+    const venues = await Venue.find({ ownerId: req.userDoc._id });
+    res.json({ venues });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch venue' });
+  }
+});
+
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const venue = await Venue.findById(req.params.id);

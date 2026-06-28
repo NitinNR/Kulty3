@@ -1,5 +1,7 @@
 import express from 'express';
 import User from '../models/User.js';
+import Venue from '../models/Venue.js';
+import Event from '../models/Event.js';
 import Entry from '../models/Entry.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
@@ -66,6 +68,26 @@ router.get('/entries', authenticateToken, requireRole(['admin']), async (req, re
   } catch (error) {
     console.error('Error fetching entries:', error);
     res.status(500).json({ error: 'Failed to fetch entries' });
+  }
+});
+
+// Venues — all venues (including inactive) with owner info
+router.get('/venues', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const venues = await Venue.find().populate('ownerId', 'name email');
+    res.json({ venues });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch venues' });
+  }
+});
+
+// Events — all events with venue info
+router.get('/events', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const events = await Event.find().populate('venueId', 'name city');
+    res.json({ events });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch events' });
   }
 });
 

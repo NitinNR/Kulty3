@@ -23,7 +23,11 @@ export const LoginPage = () => {
 
     if (!profile) return; // still fetching
 
-    if (!profile.name) {
+    if (profile.role === 'admin') {
+      navigate('/admin', { replace: true });
+    } else if (profile.role === 'venue_owner') {
+      navigate('/venue', { replace: true });
+    } else if (!profile.name) {
       navigate('/complete-profile', { replace: true });
     } else if (profile.subscription?.status === 'active') {
       navigate('/home', { replace: true });

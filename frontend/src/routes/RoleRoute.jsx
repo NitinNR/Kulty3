@@ -5,7 +5,7 @@ export const RoleRoute = ({ children, allowedRoles = [] }) => {
   const { profile } = useAuth();
 
   if (!profile || !allowedRoles.includes(profile.role)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return children;

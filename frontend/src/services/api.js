@@ -40,17 +40,22 @@ export const deleteEvent = (id) => api.delete(`/events/${id}`);
 export const scanQREntry = (data) => api.post('/entries/scan', data);
 export const getMyEntries = () => api.get('/entries/my');
 export const getVenueEntries = (venueId) => api.get(`/entries/venue/${venueId}`);
-export const uploadBill = (entryId, formData) => api.post(`/entries/${entryId}/bills`, formData, {
-  headers: { 'Content-Type': 'multipart/form-data' }
-});
+export const uploadBill = (entryId, data) => api.post(`/entries/${entryId}/bills`, data);
 export const approveBill = (entryId, billId, data) => api.patch(`/entries/${entryId}/bills/${billId}`, data);
 
 export const createPaymentOrder = (data) => api.post('/payments/create-order', data);
 export const verifyPayment = (data) => api.post('/payments/verify', data);
 
+export const bootstrapAdmin = (secret) => api.post('/auth/bootstrap-admin', { secret });
+
 export const getAdminStats = () => api.get('/admin/stats');
 export const getAllUsers = (params) => api.get('/admin/users', { params });
+export const updateUserRole = (userId, role) => api.patch(`/admin/users/${userId}/role`, { role });
+export const getAdminVenues = () => api.get('/admin/venues');
+export const getAdminEvents = () => api.get('/admin/events');
 export const getAllBills = (params) => api.get('/admin/bills', { params });
 export const getAllEntries = (params) => api.get('/admin/entries', { params });
+
+export const getMyVenue = () => api.get('/venues/my/venue');
 
 export default api;
