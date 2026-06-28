@@ -1,0 +1,9 @@
+tech stack is reactjs + nodejs + mongodb + firebase for auth and optional phone otp
+flow
+user signup either with phone or google account after user fill up other required fields after redirects to the payment screen to buy an annual subscription upon success goes to card page where he/she can see member ship card then from there he can go back to home page for venue discovery and events
+Admin and Venue : Admin featured like all crud operations regarding the adding venue or events and other features as mentioned below
+venue owner get the web portal to scan user membership card and also manage their own venue through it
+once venue scan user's qr  the user entry got marked and logged in all places in admin, venue portal and at user side as well where user use that entry or record to later upload the bills
+once user upload the bill those bill will get shown to the respective venue owner or account so that he can manually verify them and approves for the cashback
+once venue owner approves it will get shown in admin panel and then admin can take other decision like providing user cashback but its not from the admin panel or application it will be handles manually
+so this is it if you have any question feel free to ask

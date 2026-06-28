@@ -1,0 +1,56 @@
+import axios from 'axios';
+import auth from './firebase';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+api.interceptors.request.use(async (config) => {
+  const user = auth.currentUser;
+  if (user) {
+    const token = await user.getIdToken();
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
+
+export const completeProfile = (data) => api.post('/auth/complete-profile', data);
+export const getMe = () => api.get('/users/me');
+export const updateProfile = (data) => api.patch('/users/me', data);
+
+export const getVenues = (params) => api.get('/venues', { params });
+export const getVenue = (id) => api.get(`/venues/${id}`);
+export const createVenue = (data) => api.post('/venues', data);
+export const updateVenue = (id, data) => api.put(`/venues/${id}`, data);
+export const deleteVenue = (id) => api.delete(`/venues/${id}`);
+
+export const getEvents = (params) => api.get('/events', { params });
+export const getEvent = (id) => api.get(`/events/${id}`);
+export const createEvent = (data) => api.post('/events', data);
+export const updateEvent = (id, data) => api.put(`/events/${id}`, data);
+export const deleteEvent = (id) => api.delete(`/events/${id}`);
+
+export const scanQREntry = (data) => api.post('/entries/scan', data);
+export const getMyEntries = () => api.get('/entries/my');
+export const getVenueEntries = (venueId) => api.get(`/entries/venue/${venueId}`);
+export const uploadBill = (entryId, formData) => api.post(`/entries/${entryId}/bills`, formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+export const approveBill = (entryId, billId, data) => api.patch(`/entries/${entryId}/bills/${billId}`, data);
+
+export const createPaymentOrder = (data) => api.post('/payments/create-order', data);
+export const verifyPayment = (data) => api.post('/payments/verify', data);
+
+export const getAdminStats = () => api.get('/admin/stats');
+export const getAllUsers = (params) => api.get('/admin/users', { params });
+export const getAllBills = (params) => api.get('/admin/bills', { params });
+export const getAllEntries = (params) => api.get('/admin/entries', { params });
+
+export default api;
