@@ -26,23 +26,23 @@ export const ProfilePage = () => {
         {isActive && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">Membership Card</h2>
+              <h2 className="text-lg font-semibold text-gray-800">My Details</h2>
               <button
                 onClick={() => navigate('/card')}
                 className="flex items-center gap-2 text-sm font-medium text-accent-600 hover:text-accent-700 transition"
               >
                 <CreditCard className="w-4 h-4" />
-                View Full Card
+                View Card
               </button>
             </div>
-            <MembershipCard user={profile} />
-            <button
+            {/* <MembershipCard user={profile} /> */}
+            {/* <button
               onClick={() => navigate('/card')}
               className="mt-4 w-full py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition flex items-center justify-center gap-2"
             >
               <CreditCard className="w-4 h-4" />
               Open Membership Card
-            </button>
+            </button> */}
           </div>
         )}
 

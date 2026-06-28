@@ -1,61 +1,165 @@
-import { Menu, LogOut, User } from 'lucide-react';
 import { useState } from 'react';
+import { Search, Menu, X, LogOut } from 'lucide-react';
 import { logout } from '../../services/firebase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
+const NAV_LINKS = [
+  { label: 'Venues',     href: '/home'    },
+  { label: 'Events',     href: '/home'    },
+  { label: 'Membership', href: '/card'    },
+  { label: 'Support',    href: '/profile' },
+];
+
 export const Navbar = () => {
-  const [openMenu, setOpenMenu] = useState(false);
-  const navigate = useNavigate();
-  const { profile } = useAuth();
+  const [open, setOpen]  = useState(false);
+  const navigate          = useNavigate();
+  const location          = useLocation();
+  const { profile }       = useAuth();
+  const isMember          = profile?.subscription?.status === 'active';
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
+  const Avatar = ({ size = 'md' }) => {
+    const cls = size === 'sm'
+      ? 'w-8 h-8 text-xs'
+      : 'w-9 h-9 text-sm';
+    return (
+      <div
+        className={`${cls} rounded-full overflow-hidden flex items-center justify-center flex-shrink-0 border-2`}
+        style={{ backgroundColor: '#2a2a2a', borderColor: 'rgba(245,158,11,0.5)' }}
+      >
+        {profile?.profilePhoto
+          ? <img src={profile.profilePhoto} alt="" className="w-full h-full object-cover" />
+          : <span className="text-white font-bold">{profile?.name?.[0]?.toUpperCase() || 'K'}</span>
+        }
+      </div>
+    );
+  };
+
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-accent-500 rounded-lg flex items-center justify-center text-white font-bold">K</div>
-            <h1 className="text-2xl font-display font-bold text-gray-900">Kulty</h1>
+    <nav
+      className="sticky top-0 z-50"
+      style={{ backgroundColor: '#0d0d0d', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="relative flex items-center justify-between h-16">
+
+          {/* ── Mobile hamburger (left) ─────────────────── */}
+          <button
+            className="md:hidden flex items-center justify-center w-9 h-9 text-gray-400 hover:text-white transition"
+            onClick={() => setOpen(!open)}
+          >
+            {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+
+          {/* ── Logo ───────────────────────────────────── */}
+          {/* Centered on mobile, left on desktop */}
+          <Link
+            to="/home"
+            className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2 md:static md:translate-x-0"
+          >
+            <div className="w-7 h-7 bg-accent-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-gray-900 font-bold text-sm leading-none">K</span>
+            </div>
+            <span className="text-accent-500 font-display font-bold text-xl leading-none">Kulty</span>
+          </Link>
+
+          {/* ── Desktop nav links ───────────────────────── */}
+          <div className="hidden md:flex items-center gap-7">
+            {NAV_LINKS.map(({ label, href }) => (
+              <Link
+                key={label}
+                to={href}
+                className={`text-sm font-medium transition-colors ${
+                  location.pathname === href && label !== 'Support'
+                    ? 'text-white'
+                    : 'text-gray-500 hover:text-white'
+                }`}
+              >
+                {label}
+              </Link>
+            ))}
           </div>
 
-          <div className="hidden md:flex items-center gap-6">
-            {profile && <span className="text-sm text-gray-600">{profile.name}</span>}
+          {/* ── Right cluster ───────────────────────────── */}
+          <div className="flex items-center gap-2.5">
+            {/* Search icon — desktop */}
             <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 text-gray-700 hover:text-accent-500 transition"
+              onClick={() => navigate('/home')}
+              className="hidden md:flex w-9 h-9 items-center justify-center rounded-full text-gray-500 hover:text-white transition"
+              style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
             >
-              <LogOut className="w-5 h-5" />
+              <Search className="w-4 h-4" />
             </button>
-          </div>
 
-          <div className="md:hidden">
-            <button
-              onClick={() => setOpenMenu(!openMenu)}
-              className="p-2 hover:bg-gray-100 rounded-lg"
-            >
-              <Menu className="w-6 h-6" />
+            {/* Member badge + avatar — desktop */}
+            {isMember && (
+              <div className="hidden md:flex items-center gap-3">
+                <div className="text-right leading-none">
+                  <p className="text-white text-xs font-medium lowercase">{profile?.name || 'member'}</p>
+                  <p className="text-xs font-bold tracking-widest mt-0.5" style={{ color: 'rgba(245,158,11,0.75)' }}>
+                    PREMIUM PLUS
+                  </p>
+                </div>
+                <button onClick={() => navigate('/profile')}>
+                  <Avatar />
+                </button>
+              </div>
+            )}
+
+            {/* Avatar only — mobile */}
+            <button className="md:hidden" onClick={() => navigate('/profile')}>
+              <Avatar size="sm" />
             </button>
           </div>
         </div>
-
-        {openMenu && (
-          <div className="md:hidden pb-4 border-t border-gray-200 flex flex-col gap-2">
-            {profile && <span className="text-sm text-gray-600 px-2">{profile.name}</span>}
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 text-gray-700 px-2 py-2 hover:bg-gray-100 rounded-lg"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Logout</span>
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* ── Mobile drawer ─────────────────────────────── */}
+      {open && (
+        <div
+          className="md:hidden px-4 pb-5"
+          style={{ backgroundColor: '#0d0d0d', borderTop: '1px solid rgba(255,255,255,0.06)' }}
+        >
+          {isMember && (
+            <div
+              className="flex items-center gap-3 py-4"
+              style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+            >
+              <Avatar />
+              <div>
+                <p className="text-white text-sm font-medium">{profile?.name}</p>
+                <p className="text-xs font-bold tracking-widest mt-0.5" style={{ color: 'rgba(245,158,11,0.75)' }}>
+                  PREMIUM PLUS
+                </p>
+              </div>
+            </div>
+          )}
+
+          {NAV_LINKS.map(({ label, href }) => (
+            <Link
+              key={label}
+              to={href}
+              onClick={() => setOpen(false)}
+              className="flex items-center py-3.5 text-sm font-medium text-gray-400 hover:text-white transition"
+              style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+            >
+              {label}
+            </Link>
+          ))}
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 pt-4 text-sm text-gray-500 hover:text-red-400 transition"
+          >
+            <LogOut className="w-4 h-4" /> Sign out
+          </button>
+        </div>
+      )}
     </nav>
   );
 };

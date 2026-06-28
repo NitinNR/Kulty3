@@ -1,66 +1,163 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, TrendingUp, Star, Clock, ChevronRight, CreditCard, Tag } from 'lucide-react';
-import { getVenue, getEvents } from '../../services/api';
+import { ArrowLeft, MapPin, Star, TrendingUp, ChevronRight } from 'lucide-react';
+import { getVenue, getVenues } from '../../services/api';
 import { Spinner } from '../../components/common/Spinner';
+import { Navbar } from '../../components/layout/Navbar';
+import { BottomNav } from '../../components/layout/BottomNav';
 import { useAuth } from '../../hooks/useAuth';
 
-const GRADIENTS = {
-  restaurant: 'from-orange-400 via-amber-500 to-orange-600',
-  club:       'from-violet-500 via-purple-600 to-purple-800',
-  spa:        'from-emerald-400 via-teal-500 to-emerald-700',
-  cafe:       'from-amber-400 via-yellow-500 to-amber-600',
-  lounge:     'from-indigo-500 via-blue-600 to-indigo-800',
-  bar:        'from-rose-500 via-red-600 to-rose-800',
-  other:      'from-gray-600 via-gray-700 to-gray-800',
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const T = {
+  bg:        '#0d0d0d',
+  card:      '#141414',
+  cardLite:  '#1c1c1c',
+  border:    'rgba(255,255,255,0.07)',
+  textSub:   '#888888',
+  gold:      '#f59e0b',
 };
 
-const CATEGORY_EMOJI = {
-  restaurant: '🍽️',
-  club:       '🎵',
-  spa:        '💆',
-  cafe:       '☕',
-  lounge:     '🛋️',
-  bar:        '🍸',
-  other:      '🏢',
+// ─── Data helpers ─────────────────────────────────────────────────────────────
+const stableRating = (s = '') => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0xffffffff;
+  return (4.1 + (Math.abs(h) % 9) / 10).toFixed(1);
+};
+const stableReviews = (s = '') => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 17 + s.charCodeAt(i)) & 0xffffffff;
+  return 48 + (Math.abs(h) % 220);
 };
 
-const CATEGORY_DESC = {
-  restaurant: 'Fine dining & culinary experiences',
-  club:       'Nightlife & entertainment',
-  spa:        'Wellness & relaxation',
-  cafe:       'Coffee & casual vibes',
-  lounge:     'Upscale social spaces',
-  bar:        'Drinks & good company',
-  other:      'Unique experiences',
+// ─── Category metadata ────────────────────────────────────────────────────────
+const META = {
+  restaurant: {
+    gradient: 'from-orange-500 via-amber-500 to-orange-600',
+    tags:     ['Fine Dining', 'Gourmet', 'Global Cuisine'],
+    atmo:     ['🍽️', '🥂', '🍷', '🥗', '🍰'],
+  },
+  club: {
+    gradient: 'from-violet-600 via-purple-700 to-indigo-900',
+    tags:     ['Nightlife', 'DJ Sets', 'Dance Floor'],
+    atmo:     ['🎵', '💃', '🥂', '🎧', '🌃'],
+  },
+  spa: {
+    gradient: 'from-emerald-500 via-teal-600 to-emerald-800',
+    tags:     ['Wellness', 'Relaxation', 'Beauty'],
+    atmo:     ['🌿', '💆', '🕯️', '🌸', '🛁'],
+  },
+  cafe: {
+    gradient: 'from-amber-500 via-yellow-500 to-amber-700',
+    tags:     ['Coffee', 'Brunch', 'Artisan Roasts'],
+    atmo:     ['☕', '🧁', '📚', '🌿', '🍰'],
+  },
+  lounge: {
+    gradient: 'from-indigo-500 via-blue-700 to-indigo-900',
+    tags:     ['Cocktails', 'Live Music', 'Rooftop'],
+    atmo:     ['🍸', '🌃', '🎶', '🛋️', '🥂'],
+  },
+  bar: {
+    gradient: 'from-rose-600 via-red-700 to-rose-900',
+    tags:     ['Craft Beer', 'Whiskey', 'Happy Hour'],
+    atmo:     ['🍺', '🥃', '🎸', '🍻', '🌙'],
+  },
+  other: {
+    gradient: 'from-gray-600 via-gray-700 to-gray-900',
+    tags:     ['Premium', 'Exclusive', 'Members Only'],
+    atmo:     ['✨', '🌟', '💎', '🎭', '🌆'],
+  },
 };
 
+// ─── Atmosphere cell ──────────────────────────────────────────────────────────
+const AtmoCell = ({ src, gradient, emoji, rounded = '' }) => (
+  <div className={`w-full h-full overflow-hidden ${rounded}`}>
+    {src ? (
+      <img src={src} alt="" className="w-full h-full object-cover" />
+    ) : (
+      <div className={`w-full h-full bg-gradient-to-br ${gradient} flex items-center justify-center`}>
+        <span className="text-4xl select-none opacity-50">{emoji}</span>
+      </div>
+    )}
+  </div>
+);
+
+// ─── Similar venue card ───────────────────────────────────────────────────────
+const SimilarCard = ({ venue, onClick }) => {
+  const cat  = venue.category?.toLowerCase() || 'other';
+  const meta = META[cat] || META.other;
+  const rating = stableRating(venue.name);
+  return (
+    <div
+      onClick={onClick}
+      className="flex-shrink-0 w-44 rounded-2xl overflow-hidden cursor-pointer group"
+      style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
+    >
+      <div className="relative h-32">
+        {venue.images?.[0] ? (
+          <img src={venue.images[0]} alt={venue.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : (
+          <div className={`w-full h-full bg-gradient-to-br ${meta.gradient} flex items-center justify-center`}>
+            <span className="text-3xl opacity-50 select-none">{meta.atmo[0]}</span>
+          </div>
+        )}
+        {/* Rating */}
+        <div
+          className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold text-white"
+          style={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}
+        >
+          <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+          {rating}
+        </div>
+      </div>
+      <div className="p-3">
+        <p className="text-white text-sm font-semibold leading-snug mb-1 truncate">{venue.name}</p>
+        <div className="flex items-center gap-1 mb-2">
+          <MapPin className="w-3 h-3 flex-shrink-0" style={{ color: T.textSub }} />
+          <span className="text-xs truncate" style={{ color: T.textSub }}>{venue.city}</span>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          <span className="text-xs px-2 py-0.5 rounded-full capitalize font-medium"
+            style={{ backgroundColor: T.cardLite, color: '#777' }}>
+            {venue.category}
+          </span>
+          {(meta.tags[0]) && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+              style={{ backgroundColor: T.cardLite, color: '#777' }}>
+              {meta.tags[0]}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export const VenueDetailPage = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const { id }      = useParams();
+  const navigate    = useNavigate();
   const { profile } = useAuth();
 
-  const [venue, setVenue]   = useState(null);
-  const [events, setEvents] = useState([]);
+  const [venue,   setVenue]   = useState(null);
+  const [similar, setSimilar] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState('');
+  const [error,   setError]   = useState('');
 
   useEffect(() => {
+    window.scrollTo(0, 0);
     const load = async () => {
       try {
-        const venueRes = await getVenue(id);
-        setVenue(venueRes.data);
-
-        // Fetch events for this venue (silently ignore if unsupported)
-        try {
-          const eventsRes = await getEvents({ venueId: id, limit: 5 });
-          setEvents(eventsRes.data?.events || eventsRes.data || []);
-        } catch {
-          // events filter by venue may not be supported — that's fine
-        }
-      } catch (err) {
-        setError('Venue not found or unavailable.');
-        console.error(err);
+        const res = await getVenue(id);
+        const v   = res.data;
+        setVenue(v);
+        getVenues({ category: v.category, limit: 10 })
+          .then((r) => {
+            const list = (r.data?.venues || r.data || []).filter((x) => x._id !== id);
+            setSimilar(list.slice(0, 8));
+          })
+          .catch(() => {});
+      } catch {
+        setError('Venue not found.');
       } finally {
         setLoading(false);
       }
@@ -70,7 +167,7 @@ export const VenueDetailPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: T.bg }}>
         <Spinner />
       </div>
     );
@@ -78,249 +175,276 @@ export const VenueDetailPage = () => {
 
   if (error || !venue) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="text-center">
-          <p className="text-5xl mb-4">😕</p>
-          <p className="text-gray-700 font-semibold mb-2">{error || 'Venue not found'}</p>
-          <button onClick={() => navigate('/home')} className="text-sm text-amber-600 hover:underline">
-            ← Back to home
-          </button>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ backgroundColor: T.bg }}>
+        <p className="text-5xl mb-4">😕</p>
+        <p className="text-white font-semibold mb-3">{error || 'Venue not found'}</p>
+        <button onClick={() => navigate('/home')} className="text-sm text-accent-500 hover:underline">
+          ← Back to home
+        </button>
       </div>
     );
   }
 
+  // ── Derived values ──────────────────────────────────────────────────────────
   const cat      = venue.category?.toLowerCase() || 'other';
-  const gradient = GRADIENTS[cat] || GRADIENTS.other;
-  const emoji    = CATEGORY_EMOJI[cat] || '🏢';
-  const catDesc  = CATEGORY_DESC[cat] || '';
+  const meta     = META[cat] || META.other;
+  const rating   = stableRating(venue.name);
+  const reviews  = stableReviews(venue.name);
   const isMember = profile?.subscription?.status === 'active';
+  const atmo     = Array.from({ length: 5 }, (_, i) => venue.images?.[i] || null);
+
+  const benefits = [
+    { icon: '⚡', title: 'Priority Entry',
+      desc: 'Skip the queue and walk in with your Kulty card' },
+    { icon: '🥂', title: 'Welcome Drink',
+      desc: 'Complimentary signature drink on every visit' },
+    venue.cashbackPercentage > 0
+      ? { icon: '💸', title: `${venue.cashbackPercentage}% Cashback`,
+          desc: 'Earn cashback on your total spend at this venue' }
+      : { icon: '🎁', title: 'Member Perks',
+          desc: 'Exclusive discounts and special treatment for Kulty members' },
+    { icon: '🎟️', title: 'Event Access',
+      desc: 'First access to exclusive events hosted at this venue' },
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen pb-20 md:pb-0" style={{ backgroundColor: T.bg }}>
+      <Navbar />
 
-      {/* ── Hero ─────────────────────────────────────────── */}
-      <div className={`relative bg-gradient-to-br ${gradient} overflow-hidden`}>
-        {/* Back button */}
-        <div className="absolute top-0 left-0 right-0 z-10 px-4 pt-safe pt-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 bg-black bg-opacity-30 hover:bg-opacity-40 text-white px-3 py-2 rounded-xl transition backdrop-blur-sm text-sm font-medium"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
-          </button>
-        </div>
+      {/* ════════════════════════════════════════════════════
+          HERO — full-width image / gradient, ~480 px tall
+      ════════════════════════════════════════════════════ */}
+      <div className="relative" style={{ height: 'clamp(360px, 50vw, 520px)' }}>
 
-        {/* Background image */}
+        {/* Background */}
         {venue.images?.[0] ? (
-          <div className="absolute inset-0">
-            <img src={venue.images[0]} alt={venue.name} className="w-full h-full object-cover opacity-30" />
-          </div>
+          <img src={venue.images[0]} alt={venue.name}
+            className="absolute inset-0 w-full h-full object-cover" />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center opacity-20">
-            <span className="text-[160px]">{emoji}</span>
-          </div>
+          <div className={`absolute inset-0 bg-gradient-to-br ${meta.gradient}`} />
         )}
 
-        {/* Hero content */}
-        <div className="relative px-4 pt-20 pb-8 max-w-3xl mx-auto">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="bg-white bg-opacity-20 backdrop-blur-sm text-white text-xs font-medium px-3 py-1 rounded-full capitalize">
-              {venue.category || 'venue'}
-            </span>
-            {venue.city && (
-              <span className="bg-white bg-opacity-20 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full flex items-center gap-1">
-                <MapPin className="w-3 h-3" /> {venue.city}
+        {/* Cinematic gradient overlay */}
+        <div className="absolute inset-0"
+          style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0) 25%, rgba(0,0,0,0.55) 60%, rgba(13,13,13,1) 100%)' }} />
+
+        {/* Back button */}
+        <button
+          onClick={() => navigate(-1)}
+          className="absolute top-4 left-4 z-10 flex items-center gap-2 text-white text-sm font-medium px-3 py-2 rounded-xl transition hover:bg-opacity-60"
+          style={{ backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)' }}
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="hidden sm:inline">Back</span>
+        </button>
+
+        {/* Bottom overlay content */}
+        <div className="absolute bottom-0 left-0 right-0 px-5 md:px-8 pb-7">
+          <div className="max-w-5xl mx-auto">
+
+            {/* Tag pills */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              <span className="text-xs font-bold px-3 py-1 rounded-full capitalize"
+                style={{ backgroundColor: 'rgba(139,92,246,0.85)', backdropFilter: 'blur(4px)', color: '#fff' }}>
+                {venue.category}
               </span>
-            )}
-          </div>
 
-          <h1 className="text-3xl md:text-4xl font-display font-bold text-white mb-2 leading-tight">
-            {venue.name}
-          </h1>
-          <p className="text-white text-opacity-80 text-sm">{catDesc}</p>
+              {venue.cashbackPercentage > 0 && (
+                <span className="text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1"
+                  style={{ border: `1px solid ${T.gold}`, color: T.gold, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+                  <TrendingUp className="w-3 h-3" />
+                  {venue.cashbackPercentage}% BACK (MEMBER BENEFIT)
+                </span>
+              )}
 
-          {/* Cashback highlight */}
-          {venue.cashbackPercentage > 0 && (
-            <div className="mt-5 inline-flex items-center gap-2 bg-white bg-opacity-95 text-gray-900 px-4 py-2.5 rounded-2xl shadow-lg">
-              <div className="w-8 h-8 bg-emerald-500 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 leading-none">Member cashback</p>
-                <p className="text-base font-bold text-emerald-600 leading-none mt-0.5">
-                  {venue.cashbackPercentage}% on every visit
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Content ──────────────────────────────────────── */}
-      <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
-
-        {/* About */}
-        {venue.description && (
-          <div className="bg-white rounded-2xl shadow-sm p-5">
-            <h2 className="text-base font-bold text-gray-900 mb-3">About this Venue</h2>
-            <p className="text-sm text-gray-600 leading-relaxed">{venue.description}</p>
-          </div>
-        )}
-
-        {/* Details card */}
-        <div className="bg-white rounded-2xl shadow-sm p-5">
-          <h2 className="text-base font-bold text-gray-900 mb-4">Details</h2>
-          <div className="space-y-3">
-            {venue.address && (
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <MapPin className="w-4 h-4 text-gray-500" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400">Address</p>
-                  <p className="text-sm text-gray-700 font-medium">{venue.address}{venue.city ? `, ${venue.city}` : ''}</p>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Tag className="w-4 h-4 text-gray-500" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">Category</p>
-                <p className="text-sm text-gray-700 font-medium capitalize">{venue.category}</p>
-              </div>
-            </div>
-
-            {venue.cashbackPercentage > 0 && (
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <TrendingUp className="w-4 h-4 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400">Cashback for members</p>
-                  <p className="text-sm font-bold text-emerald-600">{venue.cashbackPercentage}% on bills</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Amenities */}
-        {venue.amenities?.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm p-5">
-            <h2 className="text-base font-bold text-gray-900 mb-3">Amenities</h2>
-            <div className="flex flex-wrap gap-2">
-              {venue.amenities.map((a) => (
-                <span key={a} className="bg-gray-100 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-full capitalize">
-                  {a}
+              {meta.tags.slice(0, 2).map((tag) => (
+                <span key={tag} className="text-xs font-medium px-3 py-1 rounded-full"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(4px)', color: 'rgba(255,255,255,0.85)' }}>
+                  {tag}
                 </span>
               ))}
             </div>
-          </div>
-        )}
 
-        {/* Member benefits */}
-        <div className={`rounded-2xl p-5 ${isMember ? 'bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200' : 'bg-gray-100'}`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isMember ? 'bg-amber-400' : 'bg-gray-300'}`}>
-              <CreditCard className={`w-5 h-5 ${isMember ? 'text-gray-900' : 'text-gray-500'}`} />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900">Member Benefits</h2>
-              <p className="text-xs text-gray-500">Exclusive perks at this venue</p>
-            </div>
-          </div>
+            {/* Venue name */}
+            <h1 className="font-display font-bold text-white mb-2.5 leading-tight"
+              style={{ fontSize: 'clamp(1.75rem, 4vw, 2.75rem)' }}>
+              {venue.name}
+            </h1>
 
-          <ul className="space-y-2 mb-4">
-            {venue.cashbackPercentage > 0 && (
-              <li className="flex items-center gap-2 text-sm text-gray-700">
-                <span className="text-emerald-500 text-base">✓</span>
-                <span>{venue.cashbackPercentage}% cashback on every bill</span>
-              </li>
-            )}
-            <li className="flex items-center gap-2 text-sm text-gray-700">
-              <span className="text-emerald-500 text-base">✓</span>
-              <span>Priority entry with Kulty QR scan</span>
-            </li>
-            <li className="flex items-center gap-2 text-sm text-gray-700">
-              <span className="text-emerald-500 text-base">✓</span>
-              <span>Track all visits in your history</span>
-            </li>
-          </ul>
-
-          {isMember ? (
-            <button
-              onClick={() => navigate('/card')}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition text-sm"
-            >
-              <CreditCard className="w-4 h-4" />
-              Show my membership card
-            </button>
-          ) : (
-            <button
-              onClick={() => navigate('/payment')}
-              className="w-full py-3 bg-amber-400 text-gray-900 rounded-xl font-bold hover:bg-amber-500 transition text-sm"
-            >
-              Activate Membership — ₹999/yr
-            </button>
-          )}
-        </div>
-
-        {/* How to use */}
-        <div className="bg-white rounded-2xl shadow-sm p-5">
-          <h2 className="text-base font-bold text-gray-900 mb-4">How to use your membership</h2>
-          <ol className="space-y-4">
-            {[
-              { step: '1', icon: '📱', title: 'Open your card', desc: 'Tap "My Membership Card" to view your QR code' },
-              { step: '2', icon: '🔍', title: 'Get scanned at entry', desc: 'Ask the venue staff to scan your Kulty QR code' },
-              { step: '3', icon: '🧾', title: 'Upload your bill', desc: 'After dining, upload your bill in History to claim cashback' },
-            ].map(({ step, icon, title, desc }) => (
-              <li key={step} className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-gray-900 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-                  {step}
+            {/* Location + rating row */}
+            <div className="flex items-center flex-wrap gap-x-5 gap-y-1">
+              {venue.city && (
+                <div className="flex items-center gap-1.5 text-sm text-gray-300">
+                  <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>{[venue.address, venue.city].filter(Boolean).join(', ')}</span>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{icon} {title}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
+              )}
+              <div className="flex items-center gap-1.5 text-sm">
+                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                <span className="text-white font-semibold">{rating}</span>
+                <span style={{ color: '#888' }}>({reviews} reviews)</span>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
 
-        {/* Upcoming events at this venue */}
-        {events.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm p-5">
-            <h2 className="text-base font-bold text-gray-900 mb-4">Events here</h2>
-            <div className="space-y-3">
-              {events.map((event) => (
-                <div key={event._id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                  <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <span className="text-lg">🎉</span>
+      {/* ════════════════════════════════════════════════════
+          CONTENT SECTIONS
+      ════════════════════════════════════════════════════ */}
+      <div className="max-w-5xl mx-auto px-4 md:px-8 py-10 space-y-12">
+
+        {/* ── About ─────────────────────────────────────── */}
+        <section>
+          <h2 className="text-xl font-display font-bold text-white mb-3">About the Venue</h2>
+          <p className="text-sm leading-relaxed" style={{ color: '#999' }}>
+            {venue.description ||
+              `${venue.name} is an exclusive ${venue.category} destination${venue.city ? ` in ${venue.city}` : ''}, offering an unparalleled experience for Kulty members. Discover curated moments and premium service with every visit.`}
+          </p>
+        </section>
+
+        {/* ── Kulty Membership Benefits ─────────────────── */}
+        <section>
+          <div className="rounded-2xl p-5 md:p-6"
+            style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+
+            {/* Header */}
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: 'rgba(245,158,11,0.15)' }}>
+                <span className="text-base">🏆</span>
+              </div>
+              <h2 className="text-base font-bold text-white">Kulty Membership Benefits</h2>
+            </div>
+
+            {/* 2-col grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {benefits.map(({ icon, title, desc }) => (
+                <div key={title} className="flex items-start gap-3 p-4 rounded-xl"
+                  style={{ backgroundColor: T.cardLite, border: `1px solid ${T.border}` }}>
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: 'rgba(245,158,11,0.1)' }}>
+                    <span className="text-xl leading-none">{icon}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{event.title}</p>
-                    {event.date && (
-                      <p className="text-xs text-gray-400">
-                        {new Date(event.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </p>
-                    )}
+                  <div>
+                    <p className="text-white text-sm font-semibold mb-0.5">{title}</p>
+                    <p className="text-xs leading-relaxed" style={{ color: '#777' }}>{desc}</p>
                   </div>
-                  {event.ticketPrice > 0 && (
-                    <span className="text-sm font-bold text-gray-900 flex-shrink-0">₹{event.ticketPrice}</span>
-                  )}
                 </div>
               ))}
             </div>
+
+            {!isMember && (
+              <button
+                onClick={() => navigate('/payment')}
+                className="mt-5 w-full py-3.5 rounded-xl font-bold text-sm transition hover:opacity-90 active:scale-95"
+                style={{ backgroundColor: T.gold, color: '#000' }}
+              >
+                Activate Membership — ₹999/yr
+              </button>
+            )}
           </div>
+        </section>
+
+        {/* ── Location ──────────────────────────────────── */}
+        <section>
+          <h2 className="text-xl font-display font-bold text-white mb-4">Location</h2>
+          <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
+
+            {/* Stylised map placeholder */}
+            <div className="relative flex items-center justify-center"
+              style={{
+                height: '220px',
+                backgroundColor: '#11141e',
+                backgroundImage: 'linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)',
+                backgroundSize: '44px 44px',
+              }}>
+
+              {/* Fake road lines */}
+              <div className="absolute" style={{ width: '80%', height: '2px', backgroundColor: 'rgba(255,255,255,0.045)', top: '38%' }} />
+              <div className="absolute" style={{ width: '2px',  height: '70%', backgroundColor: 'rgba(255,255,255,0.045)', left: '38%' }} />
+              <div className="absolute" style={{ width: '50%', height: '2px', backgroundColor: 'rgba(255,255,255,0.03)', top: '60%', left: '25%' }} />
+              <div className="absolute" style={{ width: '2px', height: '40%', backgroundColor: 'rgba(255,255,255,0.03)', left: '65%', top: '20%' }} />
+
+              {/* Pin */}
+              <div className="relative z-10 flex flex-col items-center gap-2">
+                <div className="w-11 h-11 rounded-full flex items-center justify-center shadow-xl"
+                  style={{ backgroundColor: T.gold }}>
+                  <MapPin className="w-5 h-5 text-gray-900" />
+                </div>
+                <div className="px-3 py-1.5 rounded-xl text-center"
+                  style={{ backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}>
+                  <p className="text-white text-xs font-semibold">{venue.name}</p>
+                  {venue.city && <p className="text-xs mt-0.5" style={{ color: '#888' }}>{venue.city}</p>}
+                </div>
+              </div>
+            </div>
+
+            {/* Address bar */}
+            <div className="flex items-center gap-3 px-5 py-3.5"
+              style={{ backgroundColor: T.card }}>
+              <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: T.gold }} />
+              <p className="text-sm" style={{ color: '#999' }}>
+                {[venue.address, venue.city].filter(Boolean).join(', ') || 'Address not available'}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Atmosphere gallery ─────────────────────────── */}
+        <section>
+          <h2 className="text-xl font-display font-bold text-white mb-4">Atmosphere</h2>
+          <div
+            className="rounded-2xl overflow-hidden"
+            style={{
+              display:             'grid',
+              gridTemplateColumns: '60% 1fr 1fr',
+              gridTemplateRows:    '178px 178px',
+              gap:                 '3px',
+            }}
+          >
+            {/* Large main image spans 2 rows */}
+            <div style={{ gridRow: '1 / 3', overflow: 'hidden' }}>
+              <AtmoCell src={atmo[0]} gradient={meta.gradient} emoji={meta.atmo[0]} />
+            </div>
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} style={{ overflow: 'hidden' }}>
+                <AtmoCell src={atmo[i]} gradient={meta.gradient} emoji={meta.atmo[i % meta.atmo.length]} />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Explore similar venues ─────────────────────── */}
+        {similar.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xl font-display font-bold text-white">Explore Similar Venues</h2>
+              <button
+                onClick={() => navigate('/home')}
+                className="flex items-center gap-1 text-xs font-semibold transition hover:opacity-80"
+                style={{ color: T.gold }}
+              >
+                View All <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar -mx-4 px-4">
+              {similar.map((v) => (
+                <SimilarCard
+                  key={v._id}
+                  venue={v}
+                  onClick={() => {
+                    navigate(`/venues/${v._id}`);
+                    window.scrollTo(0, 0);
+                  }}
+                />
+              ))}
+            </div>
+          </section>
         )}
       </div>
 
-      {/* Bottom padding */}
-      <div className="h-8" />
+      <BottomNav />
     </div>
   );
 };
