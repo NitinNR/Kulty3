@@ -27,6 +27,7 @@ const venueSchema = new mongoose.Schema({
   },
   amenities: [String],
   cashbackPercentage: { type: Number, default: 0 },
+  staff: [{ type: String }], // email addresses of staff members
   status: {
     type: String,
     enum: ['active', 'inactive'],

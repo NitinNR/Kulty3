@@ -30,7 +30,13 @@ export const LoginPage = () => {
     } else if (!profile.name) {
       navigate('/complete-profile', { replace: true });
     } else if (profile.subscription?.status === 'active') {
+      // Already a subscribed member — skip path selection
       navigate('/home', { replace: true });
+    } else if (!profile.intentRole) {
+      // New user who hasn't chosen their path yet
+      navigate('/choose-path', { replace: true });
+    } else if (profile.intentRole === 'venue_owner') {
+      navigate('/apply-venue', { replace: true });
     } else {
       navigate('/payment', { replace: true });
     }

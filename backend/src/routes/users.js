@@ -1,5 +1,6 @@
 import express from 'express';
 import User from '../models/User.js';
+import Venue from '../models/Venue.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 
@@ -16,6 +17,15 @@ router.get('/me', authenticateToken, async (req, res) => {
         phone: req.user.phone_number,
       });
       await user.save();
+    }
+
+    // Auto-promote to venue_owner if their email is in any venue's staff list
+    if (user.role === 'user' && user.email) {
+      const staffVenue = await Venue.findOne({ staff: user.email.toLowerCase() });
+      if (staffVenue) {
+        user.role = 'venue_owner';
+        await user.save();
+      }
     }
 
     res.json(user);

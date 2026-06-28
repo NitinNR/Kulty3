@@ -1,19 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Building2, QrCode, FileText, LogOut, CalendarDays } from 'lucide-react';
-import { getAdminStats } from '../../services/api';
+import { Users, Building2, QrCode, FileText, LogOut, CalendarDays, ClipboardList } from 'lucide-react';
+import { getAdminStats, getAdminApplications } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import { Spinner } from '../../components/common/Spinner';
 
 export const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
+  const [pendingApps, setPendingApps] = useState(0);
   const [loading, setLoading] = useState(true);
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    getAdminStats()
-      .then((res) => setStats(res.data))
+    Promise.all([
+      getAdminStats(),
+      getAdminApplications({ status: 'pending' }),
+    ])
+      .then(([statsRes, appsRes]) => {
+        setStats(statsRes.data);
+        setPendingApps(appsRes.data?.pending || 0);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -28,6 +35,13 @@ export const AdminDashboard = () => {
     : [];
 
   const navItems = [
+    {
+      label: 'Venue Applications',
+      desc: 'Review and approve venue owner applications',
+      path: '/admin/applications',
+      icon: ClipboardList,
+      badge: pendingApps > 0 ? pendingApps : null,
+    },
     { label: 'Manage Users & Roles', desc: 'Promote users to admin or venue owner', path: '/admin/users', icon: Users },
     { label: 'Venues', desc: 'Add, edit, or deactivate venues', path: '/admin/venues', icon: Building2 },
     { label: 'Events', desc: 'Create and manage member events', path: '/admin/events', icon: CalendarDays },
@@ -74,17 +88,24 @@ export const AdminDashboard = () => {
             {/* Navigation cards */}
             <h2 className="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {navItems.map(({ label, desc, path, icon: Icon }) => (
+              {navItems.map(({ label, desc, path, icon: Icon, badge }) => (
                 <button
                   key={path}
                   onClick={() => navigate(path)}
                   className="bg-white rounded-xl p-6 shadow-sm text-left hover:shadow-md transition group flex items-start gap-4"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center group-hover:bg-gray-900 group-hover:text-white transition">
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center group-hover:bg-gray-900 group-hover:text-white transition flex-shrink-0">
                     <Icon className="w-5 h-5 text-gray-600 group-hover:text-white transition" />
                   </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">{label}</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-gray-900">{label}</p>
+                      {badge && (
+                        <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                          {badge}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-500 mt-0.5">{desc}</p>
                   </div>
                 </button>

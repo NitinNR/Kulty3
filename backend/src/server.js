@@ -33,12 +33,13 @@ const main = async () => {
   const entriesRoutes = (await import('./routes/entries.js')).default;
   const paymentsRoutes = (await import('./routes/payments.js')).default;
   const adminRoutes = (await import('./routes/admin.js')).default;
+  const applicationsRoutes = (await import('./routes/applications.js')).default;
 
   const app = express();
   const PORT = process.env.PORT || 5000;
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
 
   // Connect to database
   connectDB().catch(err => {
@@ -53,6 +54,7 @@ const main = async () => {
   app.use('/api/entries', entriesRoutes);
   app.use('/api/payments', paymentsRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/applications', applicationsRoutes);
 
   app.get('/health', (req, res) => {
     res.json({ status: 'OK' });

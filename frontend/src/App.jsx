@@ -9,6 +9,8 @@ import { useAuth } from './hooks/useAuth';
 // Auth
 import { LoginPage } from './pages/auth/LoginPage';
 import { CompleteProfilePage } from './pages/auth/CompleteProfilePage';
+import { ChoosePathPage } from './pages/auth/ChoosePathPage';
+import { ApplyVenueOwnerPage } from './pages/auth/ApplyVenueOwnerPage';
 
 // Payment
 import { PaymentPage } from './pages/payment/PaymentPage';
@@ -27,12 +29,14 @@ import { AdminVenuesPage } from './pages/admin/AdminVenuesPage';
 import { AdminEventsPage } from './pages/admin/AdminEventsPage';
 import { AdminEntriesPage } from './pages/admin/AdminEntriesPage';
 import { AdminBillsPage } from './pages/admin/AdminBillsPage';
+import { AdminApplicationsPage } from './pages/admin/AdminApplicationsPage';
 
 // Venue owner portal
 import { VenueDashboard } from './pages/venue/VenueDashboard';
 import { ScannerPage } from './pages/venue/ScannerPage';
 import { VenueEntriesPage } from './pages/venue/VenueEntriesPage';
 import { VenueBillsPage } from './pages/venue/VenueBillsPage';
+import { VenueSettingsPage } from './pages/venue/VenueSettingsPage';
 
 import './index.css';
 
@@ -43,7 +47,10 @@ const RootRedirect = () => {
   if (!profile) return null;
   if (profile.role === 'admin') return <Navigate to="/admin" replace />;
   if (profile.role === 'venue_owner') return <Navigate to="/venue" replace />;
+  if (!profile.name) return <Navigate to="/complete-profile" replace />;
   if (profile.subscription?.status === 'active') return <Navigate to="/home" replace />;
+  if (!profile.intentRole) return <Navigate to="/choose-path" replace />;
+  if (profile.intentRole === 'venue_owner') return <Navigate to="/apply-venue" replace />;
   return <Navigate to="/payment" replace />;
 };
 
@@ -58,6 +65,8 @@ export default function App() {
 
             {/* Onboarding */}
             <Route path="/complete-profile" element={<ProtectedRoute><CompleteProfilePage /></ProtectedRoute>} />
+            <Route path="/choose-path" element={<ProtectedRoute><ChoosePathPage /></ProtectedRoute>} />
+            <Route path="/apply-venue" element={<ProtectedRoute><ApplyVenueOwnerPage /></ProtectedRoute>} />
             <Route path="/payment" element={<ProtectedRoute><PaymentPage /></ProtectedRoute>} />
             <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccessPage /></ProtectedRoute>} />
 
@@ -74,12 +83,14 @@ export default function App() {
             <Route path="/admin/events" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminEventsPage /></RoleRoute></ProtectedRoute>} />
             <Route path="/admin/entries" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminEntriesPage /></RoleRoute></ProtectedRoute>} />
             <Route path="/admin/bills" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminBillsPage /></RoleRoute></ProtectedRoute>} />
+            <Route path="/admin/applications" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminApplicationsPage /></RoleRoute></ProtectedRoute>} />
 
             {/* Venue owner portal */}
             <Route path="/venue" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner']}><VenueDashboard /></RoleRoute></ProtectedRoute>} />
             <Route path="/venue/scanner" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner']}><ScannerPage /></RoleRoute></ProtectedRoute>} />
             <Route path="/venue/entries" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner']}><VenueEntriesPage /></RoleRoute></ProtectedRoute>} />
             <Route path="/venue/bills" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner']}><VenueBillsPage /></RoleRoute></ProtectedRoute>} />
+            <Route path="/venue/settings" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner']}><VenueSettingsPage /></RoleRoute></ProtectedRoute>} />
 
             {/* Root smart redirect */}
             <Route path="/" element={<RootRedirect />} />

@@ -13,6 +13,11 @@ export const SubscriptionRoute = ({ children }) => {
     );
   }
 
+  // Venue owner applicants (pending approval) should not be pushed to payment
+  if (profile?.intentRole === 'venue_owner') {
+    return <Navigate to="/apply-venue" replace />;
+  }
+
   if (profile?.subscription?.status !== 'active') {
     return <Navigate to="/payment" replace />;
   }

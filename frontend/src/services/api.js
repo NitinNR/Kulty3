@@ -57,5 +57,14 @@ export const getAllBills = (params) => api.get('/admin/bills', { params });
 export const getAllEntries = (params) => api.get('/admin/entries', { params });
 
 export const getMyVenue = () => api.get('/venues/my/venue');
+export const addVenueStaff = (venueId, email) => api.post(`/venues/${venueId}/staff`, { email });
+export const removeVenueStaff = (venueId, email) => api.delete(`/venues/${venueId}/staff/${encodeURIComponent(email)}`);
+
+export const submitApplication = (data) => api.post('/applications', data);
+export const getMyApplication = () => api.get('/applications/mine');
+
+export const getAdminApplications = (params) => api.get('/admin/applications', { params });
+export const approveApplication = (id) => api.patch(`/admin/applications/${id}/approve`);
+export const rejectApplication = (id, reason) => api.patch(`/admin/applications/${id}/reject`, { reason });
 
 export default api;

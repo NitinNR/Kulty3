@@ -27,20 +27,24 @@ export const CompleteProfilePage = () => {
     }
   };
 
+  const toBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
   const onSubmit = async (data) => {
     try {
       setLoading(true);
       setError('');
 
-      const formData = new FormData();
-      formData.append('name', data.name);
-      formData.append('dob', data.dob);
-      if (photoFile) {
-        formData.append('profilePhoto', photoFile);
-      }
+      let profilePhoto = '';
+      if (photoFile) profilePhoto = await toBase64(photoFile);
 
-      await completeProfile(formData);
-      navigate('/payment');
+      await completeProfile({ name: data.name, dob: data.dob, profilePhoto });
+      navigate('/choose-path', { replace: true });
     } catch (err) {
       setError('Failed to complete profile. Please try again.');
       console.error(err);
@@ -110,7 +114,7 @@ export const CompleteProfilePage = () => {
               variant="primary"
               size="lg"
             >
-              {loading ? <Spinner size="sm" /> : 'Continue to Payment'}
+              {loading ? <Spinner size="sm" /> : 'Continue'}
             </Button>
           </form>
         </div>

@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import Venue from '../models/Venue.js';
 import Event from '../models/Event.js';
 import Entry from '../models/Entry.js';
+import VenueApplication from '../models/VenueApplication.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 
@@ -68,6 +69,68 @@ router.get('/entries', authenticateToken, requireRole(['admin']), async (req, re
   } catch (error) {
     console.error('Error fetching entries:', error);
     res.status(500).json({ error: 'Failed to fetch entries' });
+  }
+});
+
+// Applications — list all with optional status filter
+router.get('/applications', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = status ? { status } : {};
+    const applications = await VenueApplication.find(filter)
+      .populate('userId', 'name email profilePhoto')
+      .sort({ createdAt: -1 });
+    const pending = await VenueApplication.countDocuments({ status: 'pending' });
+    res.json({ applications, pending });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch applications' });
+  }
+});
+
+// Approve application → promote user to venue_owner only (they set up venue themselves)
+router.patch('/applications/:id/approve', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const application = await VenueApplication.findById(req.params.id).populate('userId');
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+    if (application.status === 'approved') {
+      return res.status(409).json({ error: 'Application already approved' });
+    }
+
+    // Promote user to venue_owner — they will add their venue themselves
+    const user = await User.findByIdAndUpdate(
+      application.userId._id,
+      { role: 'venue_owner' },
+      { new: true }
+    );
+
+    application.status = 'approved';
+    application.reviewedBy = req.userDoc._id;
+    application.reviewedAt = new Date();
+    await application.save();
+
+    res.json({ message: 'Approved — user can now log in and create their venue', user, application });
+  } catch (error) {
+    console.error('Error approving application:', error);
+    res.status(500).json({ error: 'Failed to approve application' });
+  }
+});
+
+// Reject application
+router.patch('/applications/:id/reject', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const application = await VenueApplication.findById(req.params.id);
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+
+    application.status = 'rejected';
+    application.rejectionReason = reason || '';
+    application.reviewedBy = req.userDoc._id;
+    application.reviewedAt = new Date();
+    await application.save();
+
+    res.json({ message: 'Rejected', application });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reject application' });
   }
 });
 

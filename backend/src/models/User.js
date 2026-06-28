@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema({
   },
   membershipId: { type: String, unique: true, sparse: true },
   qrCodeData: String,
+  intentRole: { type: String, enum: ['member', 'venue_owner'], default: null },
   subscription: {
     status: {
       type: String,
