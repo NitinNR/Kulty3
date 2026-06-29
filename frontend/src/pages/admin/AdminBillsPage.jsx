@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ImageIcon } from 'lucide-react';
+import { ArrowLeft, ImageIcon, Eye, X } from 'lucide-react';
 import { getAllBills } from '../../services/api';
 import { Spinner } from '../../components/common/Spinner';
 import { Pagination } from '../../components/common/Pagination';
@@ -110,12 +110,18 @@ export const AdminBillsPage = () => {
                           {item.imageUrl ? (
                             <button
                               onClick={() => setPreviewImage(item.imageUrl)}
-                              className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 hover:opacity-80 transition mx-auto block"
+                              className="inline-flex flex-col items-center gap-1 group"
                             >
-                              <img src={item.imageUrl} alt="bill" className="w-full h-full object-cover" />
+                              <div className="w-14 h-10 rounded-lg overflow-hidden border border-gray-200 group-hover:border-gray-400 transition relative">
+                                <img src={item.imageUrl} alt="bill" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition flex items-center justify-center">
+                                  <Eye className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition" />
+                                </div>
+                              </div>
+                              <span className="text-xs text-blue-600 group-hover:underline">View</span>
                             </button>
                           ) : (
-                            <ImageIcon className="w-5 h-5 text-gray-200 mx-auto" />
+                            <ImageIcon className="w-5 h-5 text-gray-300 mx-auto" />
                           )}
                         </td>
                       </tr>
@@ -135,10 +141,21 @@ export const AdminBillsPage = () => {
 
       {previewImage && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
           onClick={() => setPreviewImage(null)}
         >
-          <img src={previewImage} alt="Bill" className="max-w-full max-h-full rounded-xl" />
+          <button
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white bg-opacity-10 hover:bg-opacity-20 flex items-center justify-center text-white transition"
+            onClick={() => setPreviewImage(null)}
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <img
+            src={previewImage}
+            alt="Bill"
+            className="max-w-[90vw] max-h-[85vh] rounded-2xl object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

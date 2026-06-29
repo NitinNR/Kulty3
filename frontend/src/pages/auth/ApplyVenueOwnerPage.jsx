@@ -170,7 +170,7 @@ export const ApplyVenueOwnerPage = () => {
                 value={form.businessName}
                 onChange={(e) => set('businessName', e.target.value)}
                 placeholder="e.g. The Grand Lounge"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
               />
             </div>
 
@@ -179,7 +179,7 @@ export const ApplyVenueOwnerPage = () => {
               <select
                 value={form.category}
                 onChange={(e) => set('category', e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
               >
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
@@ -194,7 +194,7 @@ export const ApplyVenueOwnerPage = () => {
                 value={form.city}
                 onChange={(e) => set('city', e.target.value)}
                 placeholder="e.g. Mumbai"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
               />
             </div>
 
@@ -205,7 +205,7 @@ export const ApplyVenueOwnerPage = () => {
                 value={form.address}
                 onChange={(e) => set('address', e.target.value)}
                 placeholder="Street address"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
               />
             </div>
 
@@ -216,7 +216,7 @@ export const ApplyVenueOwnerPage = () => {
                 value={form.contactPhone}
                 onChange={(e) => set('contactPhone', e.target.value)}
                 placeholder="+91 XXXXXXXXXX"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
               />
             </div>
 
@@ -227,7 +227,7 @@ export const ApplyVenueOwnerPage = () => {
                 min="0" max="100"
                 value={form.cashbackPercentage}
                 onChange={(e) => set('cashbackPercentage', Number(e.target.value))}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
               />
             </div>
 
@@ -238,7 +238,7 @@ export const ApplyVenueOwnerPage = () => {
                 value={form.description}
                 onChange={(e) => set('description', e.target.value)}
                 placeholder="Tell us about your venue..."
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
               />
             </div>
 

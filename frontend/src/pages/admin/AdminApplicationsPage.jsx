@@ -172,7 +172,7 @@ export const AdminApplicationsPage = () => {
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="Reason for rejection (optional — will be shown to applicant)"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none mb-4"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none mb-4"
             />
             <div className="flex gap-3">
               <button onClick={() => setRejectModal(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition">

@@ -77,7 +77,7 @@ export const AdminUsersPage = () => {
             placeholder="Filter current page by name or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
         </div>
 
@@ -132,7 +132,7 @@ export const AdminUsersPage = () => {
                               value={user.role}
                               onChange={(e) => handleRoleChange(user._id, e.target.value)}
                               disabled={updating === user._id}
-                              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50"
+                              className="text-sm text-gray-900 border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50"
                             >
                               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                             </select>

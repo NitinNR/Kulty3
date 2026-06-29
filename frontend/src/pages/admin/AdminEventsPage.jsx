@@ -210,7 +210,7 @@ export const AdminEventsPage = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
                   <input type={type} value={form[key]} placeholder={placeholder}
                     onChange={(e) => setForm({ ...form, [key]: type === 'number' ? Number(e.target.value) : e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900" />
                 </div>
               ))}
 
@@ -218,13 +218,13 @@ export const AdminEventsPage = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea rows={3} value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none" />
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none" />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Venue *</label>
                 <select value={form.venueId} onChange={(e) => setForm({ ...form, venueId: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
                   <option value="">— Select venue —</option>
                   {venues.map((v) => <option key={v._id} value={v._id}>{v.name}</option>)}
                 </select>
@@ -233,7 +233,7 @@ export const AdminEventsPage = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
                   {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>

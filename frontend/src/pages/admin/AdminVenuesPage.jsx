@@ -120,7 +120,7 @@ export const AdminVenuesPage = () => {
             placeholder="Search venues..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
         </div>
 
@@ -213,7 +213,7 @@ export const AdminVenuesPage = () => {
                     type={type}
                     value={form[key]}
                     onChange={(e) => setForm({ ...form, [key]: type === 'number' ? Number(e.target.value) : e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
                   />
                 </div>
               ))}
@@ -222,13 +222,13 @@ export const AdminVenuesPage = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea rows={3} value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none" />
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none" />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                 <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
                   {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
@@ -236,7 +236,7 @@ export const AdminVenuesPage = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Assign Owner</label>
                 <select value={form.ownerId} onChange={(e) => setForm({ ...form, ownerId: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
                   <option value="">— None —</option>
                   {owners.map((o) => <option key={o._id} value={o._id}>{o.name} ({o.email})</option>)}
                 </select>
@@ -245,7 +245,7 @@ export const AdminVenuesPage = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                 </select>

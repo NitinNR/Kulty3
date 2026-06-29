@@ -204,8 +204,9 @@ router.get('/bills', authenticateToken, requireRole(['admin']), async (req, res)
     entries.forEach((entry) => {
       entry.bills.forEach((bill) => {
         if (!status || bill.status === status) {
+          const b = bill.toObject();
           allBills.push({
-            ...bill,
+            ...b,
             entryId: entry._id,
             userId: entry.userId,
             venueId: entry.venueId,
@@ -214,10 +215,14 @@ router.get('/bills', authenticateToken, requireRole(['admin']), async (req, res)
       });
     });
 
-    const paginated = allBills.slice((page - 1) * limit, page * limit);
+    allBills.sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0));
+
+    const pg = parseInt(page, 10);
+    const lim = parseInt(limit, 10);
+    const paginated = allBills.slice((pg - 1) * lim, pg * lim);
     const total = allBills.length;
 
-    res.json({ bills: paginated, total, page, limit });
+    res.json({ bills: paginated, total, page: pg, limit: lim });
   } catch (error) {
     console.error('Error fetching bills:', error);
     res.status(500).json({ error: 'Failed to fetch bills' });

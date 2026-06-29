@@ -76,7 +76,7 @@ const VenueSetupForm = ({ prefill, onCreated }) => {
                 value={form[key]}
                 placeholder={placeholder}
                 onChange={(e) => set(key, type === 'number' ? Number(e.target.value) : e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
               />
             </div>
           ))}
@@ -86,7 +86,7 @@ const VenueSetupForm = ({ prefill, onCreated }) => {
             <select
               value={form.category}
               onChange={(e) => set('category', e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
             >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
@@ -101,7 +101,7 @@ const VenueSetupForm = ({ prefill, onCreated }) => {
               value={form.description}
               onChange={(e) => set('description', e.target.value)}
               placeholder="Tell members what makes your venue special..."
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
             />
           </div>
         </div>
