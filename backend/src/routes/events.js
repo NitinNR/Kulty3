@@ -1,6 +1,7 @@
 import express from 'express';
 import Event from '../models/Event.js';
 import User from '../models/User.js';
+import Venue from '../models/Venue.js';
 import { authenticateToken, optionalAuth } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 
@@ -21,10 +22,22 @@ const withRegInfo = (event, userId) => {
 // ── List events ───────────────────────────────────────────────────────────────
 router.get('/', optionalAuth, async (req, res) => {
   try {
-    const { venueId, status, page = 1, limit = 20 } = req.query;
+    const { venueId, status, search, page = 1, limit = 20 } = req.query;
     const filter = {};
     if (venueId) filter.venueId = venueId;
     if (status)  filter.status  = status;
+
+    if (search) {
+      const re = new RegExp(search, 'i');
+      const matchingVenues = await Venue.find({
+        $or: [{ name: re }, { city: re }],
+      }).select('_id');
+      const vids = matchingVenues.map((v) => v._id);
+      filter.$or = [
+        { title: re },
+        ...(vids.length ? [{ venueId: { $in: vids } }] : []),
+      ];
+    }
 
     const events = await Event.find(filter)
       .populate('venueId')

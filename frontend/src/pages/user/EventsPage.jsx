@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarDays, Clock, MapPin, Ticket, ChevronRight } from 'lucide-react';
+import { CalendarDays, Clock, MapPin, Ticket, Search, X } from 'lucide-react';
 import { getEvents } from '../../services/api';
 import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
@@ -55,31 +55,23 @@ const EventCard = ({ event, onClick }) => {
         ) : (
           <div
             className="w-full h-full flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, #1c1408 0%, #0d0d0d 60%, #1a1204 100%)',
-            }}
+            style={{ background: 'linear-gradient(135deg, #1c1408 0%, #0d0d0d 60%, #1a1204 100%)' }}
           >
             <span className="text-5xl opacity-20 select-none">🎉</span>
           </div>
         )}
 
-        {/* Status badge */}
-        <span
-          className="absolute top-3 left-3 text-xs font-bold px-2.5 py-1 rounded-full"
-          style={{ backgroundColor: status.bg, color: status.color }}
-        >
+        <span className="absolute top-3 left-3 text-xs font-bold px-2.5 py-1 rounded-full"
+          style={{ backgroundColor: status.bg, color: status.color }}>
           {status.label}
         </span>
 
-        {/* Ticket price badge */}
-        <span
-          className="absolute top-3 right-3 text-xs font-bold px-2.5 py-1 rounded-full"
+        <span className="absolute top-3 right-3 text-xs font-bold px-2.5 py-1 rounded-full"
           style={{
             backgroundColor: isFree ? 'rgba(34,197,94,0.2)' : 'rgba(0,0,0,0.6)',
             color: isFree ? '#4ade80' : '#fff',
             backdropFilter: 'blur(4px)',
-          }}
-        >
+          }}>
           {isFree ? 'FREE' : `₹${event.ticketPrice}`}
         </span>
       </div>
@@ -92,7 +84,7 @@ const EventCard = ({ event, onClick }) => {
 
         {/* Venue */}
         {venue?.name && (
-          <div className="flex items-center gap-1.5 mb-2">
+          <div className="flex items-center gap-1.5 mb-1.5">
             <MapPin className="w-3 h-3 flex-shrink-0" style={{ color: T.dim }} />
             <span className="text-xs truncate" style={{ color: T.sub }}>
               {venue.name}{venue.city ? `, ${venue.city}` : ''}
@@ -100,7 +92,7 @@ const EventCard = ({ event, onClick }) => {
           </div>
         )}
 
-        {/* Date + time row */}
+        {/* Date + time */}
         <div className="flex items-center gap-4">
           {dateStr && (
             <div className="flex items-center gap-1.5">
@@ -116,7 +108,6 @@ const EventCard = ({ event, onClick }) => {
           )}
         </div>
 
-        {/* Capacity */}
         {event.capacity && (
           <div className="flex items-center gap-1.5 mt-2">
             <Ticket className="w-3 h-3 flex-shrink-0" style={{ color: T.dim }} />
@@ -138,6 +129,7 @@ export const EventsPage = () => {
   const [hasMore,     setHasMore]     = useState(false);
   const [evtPage,     setEvtPage]     = useState(1);
   const [filter,      setFilter]      = useState('');
+  const [search,      setSearch]      = useState('');
   const sentinelRef = useRef(null);
 
   const fetchEvents = useCallback(async (pg, append = false) => {
@@ -145,6 +137,7 @@ export const EventsPage = () => {
     try {
       const params = { page: pg, limit: EVENT_LIMIT };
       if (filter) params.status = filter;
+      if (search) params.search = search;
       const res = await getEvents(params);
       const fetched = res.data?.events || [];
       const total   = res.data?.total  || 0;
@@ -156,9 +149,12 @@ export const EventsPage = () => {
     } finally {
       if (pg === 1) setLoading(false); else setLoadingMore(false);
     }
-  }, [filter]);
+  }, [filter, search]);
 
-  useEffect(() => { fetchEvents(1, false); }, [filter]);
+  useEffect(() => {
+    const t = setTimeout(() => fetchEvents(1, false), search ? 400 : 0);
+    return () => clearTimeout(t);
+  }, [filter, search]);
 
   useEffect(() => {
     if (!hasMore || loading || loadingMore) return;
@@ -170,6 +166,8 @@ export const EventsPage = () => {
     if (el) observer.observe(el);
     return () => observer.disconnect();
   }, [hasMore, loading, loadingMore, evtPage, fetchEvents]);
+
+  const hasFilters = filter || search;
 
   return (
     <div className="min-h-screen pb-20 md:pb-0" style={{ backgroundColor: T.bg }}>
@@ -188,6 +186,30 @@ export const EventsPage = () => {
           <p className="text-sm" style={{ color: T.sub }}>
             Exclusive experiences curated for Kulty members
           </p>
+        </div>
+
+        {/* Search bar */}
+        <div className="relative mb-5"
+          style={{ border: `1px solid rgba(255,255,255,0.1)`, borderRadius: '14px' }}>
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+            style={{ color: T.dim }} />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by event name, venue or city..."
+            className="w-full pl-11 pr-10 py-3.5 text-sm text-white bg-transparent focus:outline-none placeholder-gray-600"
+            style={{ borderRadius: '14px' }}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full"
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: T.sub }}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
         </div>
 
         {/* Filter pills */}
@@ -224,15 +246,15 @@ export const EventsPage = () => {
             <p className="text-4xl mb-4">📅</p>
             <p className="text-white font-semibold mb-1">No events found</p>
             <p className="text-sm mb-5" style={{ color: T.sub }}>
-              {filter ? 'Try a different filter' : 'Check back soon for upcoming events'}
+              {hasFilters ? 'Try a different search or filter' : 'Check back soon for upcoming events'}
             </p>
-            {filter && (
+            {hasFilters && (
               <button
-                onClick={() => setFilter('')}
+                onClick={() => { setFilter(''); setSearch(''); }}
                 className="text-sm font-semibold"
                 style={{ color: T.gold }}
               >
-                Show all events
+                Clear filters
               </button>
             )}
           </div>
@@ -240,9 +262,11 @@ export const EventsPage = () => {
           <>
             <div className="flex items-center gap-2 mb-5">
               <span className="text-sm font-semibold text-white">{events.length} event{events.length !== 1 ? 's' : ''}</span>
-              <span className="text-sm" style={{ color: T.dim }}>
-                {filter ? `— ${FILTERS.find((f) => f.value === filter)?.label}` : ''}
-              </span>
+              {(search || filter) && (
+                <span className="text-sm" style={{ color: T.dim }}>
+                  {search ? `— "${search}"` : `— ${FILTERS.find((f) => f.value === filter)?.label}`}
+                </span>
+              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-6">
               {events.map((event) => (

@@ -12,9 +12,12 @@ router.get('/', optionalAuth, async (req, res) => {
     const filter = { status: 'active' };
 
     if (search) {
+      const re = new RegExp(search, 'i');
       filter.$or = [
-        { name: new RegExp(search, 'i') },
-        { description: new RegExp(search, 'i') },
+        { name: re },
+        { description: re },
+        { city: re },
+        { address: re },
       ];
     }
 

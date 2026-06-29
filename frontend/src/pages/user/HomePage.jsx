@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Search, MapPin, Star, Heart, ChevronRight,
+  Search, MapPin, Star, Heart, ChevronRight, X,
   LayoutGrid, Utensils, Music, Leaf, Coffee, Wine, GlassWater,
-  Compass, Camera, AtSign, Sparkles, CalendarDays,
+  Compass, Camera, AtSign, Sparkles, CalendarDays, TrendingUp, Clock,
 } from 'lucide-react';
 import { getVenues, getEvents } from '../../services/api';
 import { Navbar } from '../../components/layout/Navbar';
@@ -45,36 +45,57 @@ const stableNum = (s = '', mod = 10, min = 0) => {
   return min + Math.abs(h) % mod;
 };
 const stableRating = (s) => (4.1 + stableNum(s, 9) / 10).toFixed(1);
-const stablePrice  = (s) => Math.max(1, Math.min(4, 1 + stableNum(s, 4)));
 
-// ── Skeleton primitives ───────────────────────────────────────────────────────
+// ── Favorites helpers (localStorage) ─────────────────────────────────────────
+const FAVES_KEY = 'kultyFavoriteVenues';
+const getFaves = () => {
+  try { return JSON.parse(localStorage.getItem(FAVES_KEY) || '[]'); } catch { return []; }
+};
+const setFaves = (ids) => {
+  try { localStorage.setItem(FAVES_KEY, JSON.stringify(ids)); } catch {}
+};
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 const Skel = ({ w, h, rounded = 'rounded-xl', className = '' }) => (
-  <div
-    className={`animate-pulse ${rounded} ${className}`}
-    style={{ width: w, height: h, backgroundColor: T.cardLite }}
-  />
+  <div className={`animate-pulse ${rounded} ${className}`}
+    style={{ width: w, height: h, backgroundColor: T.cardLite }} />
 );
 
 const VenueCardSkeleton = () => (
   <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
     <Skel h="200px" rounded="rounded-none" className="w-full" />
-    <div className="p-4 space-y-3">
-      <Skel h="16px" w="72%" />
-      <Skel h="12px" w="45%" />
-      <Skel h="12px" w="30%" />
+    <div className="p-4 space-y-2.5">
+      <Skel h="15px" w="68%" />
+      <Skel h="11px" w="42%" />
+      <Skel h="11px" w="55%" />
+      <div className="flex gap-1.5 pt-1">
+        <Skel h="20px" w="60px" rounded="rounded-full" />
+        <Skel h="20px" w="70px" rounded="rounded-full" />
+      </div>
+      <Skel h="11px" w="35%" />
     </div>
   </div>
 );
 
 // ── Venue card ────────────────────────────────────────────────────────────────
 const VenueCard = ({ venue, onClick }) => {
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(() => getFaves().includes(venue._id));
+  const [pop,   setPop]   = useState(false);
+
   const cat     = venue.category?.toLowerCase() || 'other';
   const meta    = CAT_META[cat] || CAT_META.other;
   const CatIcon = CATS.find((c) => c.value === cat)?.Icon || LayoutGrid;
   const rating  = stableRating(venue.name);
-  const price   = '₹'.repeat(stablePrice(venue.name));
-  const tags    = venue.amenities?.filter(Boolean).slice(0, 2) || [];
+  const tags    = (venue.amenities || []).filter(Boolean).slice(0, 3);
+
+  const toggleLike = (e) => {
+    e.stopPropagation();
+    const next  = !liked;
+    const faves = getFaves();
+    setFaves(next ? [...faves.filter((id) => id !== venue._id), venue._id] : faves.filter((id) => id !== venue._id));
+    setLiked(next);
+    if (next) { setPop(true); setTimeout(() => setPop(false), 600); }
+  };
 
   return (
     <div
@@ -82,36 +103,41 @@ const VenueCard = ({ venue, onClick }) => {
       className="rounded-2xl overflow-hidden cursor-pointer group transition-all duration-200 hover:-translate-y-0.5"
       style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
     >
+      {/* ── Image ── */}
       <div className="relative overflow-hidden" style={{ height: '200px' }}>
         {venue.images?.[0] ? (
           <img src={venue.images[0]} alt={venue.name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         ) : (
           <div className={`w-full h-full bg-gradient-to-br ${meta.gradient} flex items-center justify-center`}>
-            <span className="text-6xl opacity-30 select-none">{meta.atmo}</span>
+            <span className="text-6xl opacity-25 select-none">{meta.atmo}</span>
           </div>
         )}
 
+        {/* Cashback / member badge */}
         {venue.cashbackPercentage > 0 ? (
           <div className="absolute top-3 left-3 flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full"
             style={{ backgroundColor: T.gold, color: '#000' }}>
+            <TrendingUp className="w-3 h-3" />
             {venue.cashbackPercentage}% BACK
           </div>
         ) : (
           <div className="absolute top-3 left-3 text-xs font-bold px-2.5 py-1 rounded-full"
             style={{ backgroundColor: 'rgba(139,92,246,0.9)', color: '#fff' }}>
-            MEMBER EXCLUSIVE
+            MEMBER
           </div>
         )}
 
+        {/* Heart / favorite */}
         <button
-          onClick={(e) => { e.stopPropagation(); setLiked((l) => !l); }}
-          className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full transition"
+          onClick={toggleLike}
+          className={`absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full transition-transform duration-150 ${pop ? 'scale-125' : 'scale-100'}`}
           style={{ backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
         >
-          <Heart className={`w-4 h-4 transition ${liked ? 'fill-red-400 text-red-400' : 'text-white'}`} />
+          <Heart className={`w-4 h-4 transition-all duration-200 ${liked ? 'fill-red-400 text-red-400 scale-110' : 'text-white'}`} />
         </button>
 
+        {/* Category chip */}
         <div className="absolute bottom-3 left-3 flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
           style={{ backgroundColor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', color: '#ddd' }}>
           <CatIcon className="w-3 h-3" />
@@ -119,23 +145,50 @@ const VenueCard = ({ venue, onClick }) => {
         </div>
       </div>
 
+      {/* ── Info ── */}
       <div className="p-4">
-        <div className="flex items-start justify-between gap-2 mb-1.5">
+        {/* Name + rating */}
+        <div className="flex items-start justify-between gap-2 mb-1">
           <h3 className="text-white font-semibold text-sm leading-snug flex-1 line-clamp-1">{venue.name}</h3>
           <div className="flex items-center gap-1 flex-shrink-0">
             <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
             <span className="text-white text-xs font-semibold">{rating}</span>
           </div>
         </div>
-        <div className="flex items-center gap-1 mb-3">
+
+        {/* City */}
+        <div className="flex items-center gap-1 mb-0.5">
           <MapPin className="w-3 h-3 flex-shrink-0" style={{ color: T.dim }} />
-          <span className="text-xs truncate" style={{ color: T.sub }}>{venue.city || 'Mumbai'}</span>
+          <span className="text-xs truncate" style={{ color: T.sub }}>{venue.city || 'India'}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <p className="text-xs">
-            <span style={{ color: T.gold }}>{price}</span>
-            {tags.length > 0 && <span style={{ color: T.dim }}> · {tags.join(', ')}</span>}
-          </p>
+
+        {/* Address */}
+        {venue.address && (
+          <p className="text-xs truncate mb-2 pl-4" style={{ color: T.dim }}>{venue.address}</p>
+        )}
+
+        {/* Amenity tags */}
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2 mb-2">
+            {tags.map((tag) => (
+              <span key={tag} className="text-xs px-2 py-0.5 rounded-full font-medium"
+                style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: '#999', border: '1px solid rgba(255,255,255,0.08)' }}>
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Footer: cashback label + arrow */}
+        <div className="flex items-center justify-between mt-2 pt-2"
+          style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          {venue.cashbackPercentage > 0 ? (
+            <span className="text-xs font-medium" style={{ color: T.gold }}>
+              {venue.cashbackPercentage}% cashback for members
+            </span>
+          ) : (
+            <span className="text-xs" style={{ color: T.dim }}>Member exclusive venue</span>
+          )}
           <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
             style={{ backgroundColor: T.cardLite }}>
             <ChevronRight className="w-3.5 h-3.5" style={{ color: '#666' }} />
@@ -205,7 +258,7 @@ export const HomePage = () => {
     if (pg === 1) setLoading(true); else setLoadingMore(true);
     try {
       const params = { page: pg, limit: VENUE_LIMIT };
-      if (search)   params.search   = search;
+      if (search)            params.search   = search;
       if (category !== 'all') params.category = category;
       const vr = await getVenues(params);
       const fetched = vr.data?.venues || [];
@@ -220,20 +273,17 @@ export const HomePage = () => {
     }
   }, [search, category]);
 
-  // Reset + reload when search/category changes
   useEffect(() => {
     const t = setTimeout(() => fetchVenues(1, false), search ? 400 : 0);
     return () => clearTimeout(t);
   }, [search, category]);
 
-  // Load events once
   useEffect(() => {
     getEvents({ limit: 4 })
       .then((er) => setEvents(er.data?.events || []))
       .catch(console.error);
   }, []);
 
-  // IntersectionObserver: load next page when sentinel enters viewport
   useEffect(() => {
     if (!hasMore || loading || loadingMore) return;
     const observer = new IntersectionObserver(
@@ -255,7 +305,6 @@ export const HomePage = () => {
 
         {/* ── Discovery header ─────────────────────────────── */}
         <div className="mb-6">
-          {/* Tagline */}
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 flex-shrink-0" style={{ color: T.gold }} />
             <span className="text-xs font-bold tracking-[0.2em] uppercase" style={{ color: T.gold }}>
@@ -274,9 +323,9 @@ export const HomePage = () => {
         {!loading && venues.length > 0 && (
           <div className="flex items-center gap-4 md:gap-6 mb-6 overflow-x-auto no-scrollbar pb-1">
             {[
-              { label: 'Partner Venues', value: venues.length + '+' },
-              { label: 'Upcoming Events', value: events.length > 0 ? events.length + '+' : '—' },
-              { label: 'Cities', value: [...new Set(venues.map((v) => v.city).filter(Boolean))].length + '+' },
+              { label: 'Partner Venues',   value: venues.length + '+' },
+              { label: 'Upcoming Events',  value: events.length > 0 ? events.length + '+' : '—' },
+              { label: 'Cities',           value: [...new Set(venues.map((v) => v.city).filter(Boolean))].length + '+' },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-center gap-2 flex-shrink-0">
                 <p className="text-base font-bold text-white">{value}</p>
@@ -295,10 +344,19 @@ export const HomePage = () => {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search venues and cities..."
-            className="w-full pl-11 pr-4 py-3.5 text-sm text-white bg-transparent focus:outline-none placeholder-gray-600"
+            placeholder="Search by venue name, city or address..."
+            className="w-full pl-11 pr-10 py-3.5 text-sm text-white bg-transparent focus:outline-none placeholder-gray-600"
             style={{ borderRadius: '14px' }}
           />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full"
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: T.sub }}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
         </div>
 
         {/* ── Category pills ───────────────────────────────── */}
@@ -364,7 +422,6 @@ export const HomePage = () => {
                 <VenueCard key={venue._id} venue={venue} onClick={() => navigate(`/venues/${venue._id}`)} />
               ))}
             </div>
-            {/* Infinite scroll sentinel */}
             <div ref={sentinelRef} className="h-1" />
             {loadingMore && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-6">
@@ -402,16 +459,29 @@ export const HomePage = () => {
                   className="flex items-center gap-4 p-4 rounded-xl cursor-pointer hover:opacity-80 transition"
                   style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
                   onClick={() => navigate(`/events/${event._id}`)}>
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: T.cardLite }}>
-                    <CalendarDays className="w-5 h-5" style={{ color: T.gold }} />
-                  </div>
+                  {event.bannerImage ? (
+                    <img src={event.bannerImage} alt={event.title}
+                      className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: T.cardLite }}>
+                      <CalendarDays className="w-5 h-5" style={{ color: T.gold }} />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-semibold text-sm truncate">{event.title}</p>
-                    {event.date && (
-                      <p className="text-xs mt-0.5" style={{ color: T.sub }}>
-                        {new Date(event.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {event.venueId?.name && (
+                      <p className="text-xs truncate mt-0.5" style={{ color: T.dim }}>
+                        {event.venueId.name}
                       </p>
+                    )}
+                    {event.date && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <Clock className="w-3 h-3" style={{ color: T.dim }} />
+                        <p className="text-xs" style={{ color: T.sub }}>
+                          {new Date(event.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
                     )}
                   </div>
                   {event.ticketPrice > 0 ? (
