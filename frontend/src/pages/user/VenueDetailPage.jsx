@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, Star, TrendingUp, ChevronRight, ChevronLeft, X } from 'lucide-react';
 import { getVenue, getVenues } from '../../services/api';
-import { Spinner } from '../../components/common/Spinner';
 import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
 import { useAuth } from '../../hooks/useAuth';
@@ -174,8 +173,44 @@ export const VenueDetailPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: T.bg }}>
-        <Spinner />
+      <div className="min-h-screen" style={{ backgroundColor: T.bg }}>
+        <Navbar />
+        {/* Hero skeleton */}
+        <div className="w-full animate-pulse" style={{ height: 'clamp(360px, 50vw, 520px)', backgroundColor: '#1a1a1a' }}>
+          <div className="absolute bottom-0 left-0 right-0 px-5 md:px-8 pb-7 max-w-5xl mx-auto">
+            <div className="h-5 w-24 rounded-full mb-3" style={{ backgroundColor: '#2a2a2a' }} />
+            <div className="h-9 w-72 rounded-xl mb-3" style={{ backgroundColor: '#2a2a2a' }} />
+            <div className="h-4 w-48 rounded-xl" style={{ backgroundColor: '#2a2a2a' }} />
+          </div>
+        </div>
+        {/* Content skeletons */}
+        <div className="max-w-5xl mx-auto px-4 md:px-8 py-10 space-y-10">
+          {/* About */}
+          <div className="space-y-3">
+            <div className="h-6 w-40 rounded-xl animate-pulse" style={{ backgroundColor: '#1c1c1c' }} />
+            <div className="space-y-2">
+              {[100, 90, 70].map((w) => (
+                <div key={w} className={`h-4 rounded-xl animate-pulse`} style={{ width: `${w}%`, backgroundColor: '#1c1c1c' }} />
+              ))}
+            </div>
+          </div>
+          {/* Benefits */}
+          <div className="rounded-2xl p-6 space-y-4 animate-pulse" style={{ backgroundColor: '#141414' }}>
+            <div className="h-5 w-36 rounded-xl" style={{ backgroundColor: '#1c1c1c' }} />
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: '#1c1c1c' }} />
+                <div className="h-4 rounded-xl flex-1" style={{ backgroundColor: '#1c1c1c' }} />
+              </div>
+            ))}
+          </div>
+          {/* Gallery */}
+          <div>
+            <div className="h-6 w-24 rounded-xl animate-pulse mb-4" style={{ backgroundColor: '#1c1c1c' }} />
+            <div className="rounded-2xl overflow-hidden animate-pulse" style={{ height: '360px', backgroundColor: '#1c1c1c' }} />
+          </div>
+        </div>
+        <BottomNav />
       </div>
     );
   }
@@ -422,16 +457,27 @@ export const VenueDetailPage = () => {
               </button>
             )}
           </div>
+          {/* Mobile: 2-col uniform grid */}
+          <div className="grid grid-cols-2 gap-1 rounded-2xl overflow-hidden md:hidden" style={{ height: '320px' }}>
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} style={{ overflow: 'hidden' }}>
+                <AtmoCell
+                  src={atmo[i]} gradient={meta.gradient} emoji={meta.atmo[i % meta.atmo.length]}
+                  onClick={atmo[i] ? () => setLightboxIdx(i) : undefined}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: cinematic 3-col mosaic */}
           <div
-            className="rounded-2xl overflow-hidden"
+            className="hidden md:grid rounded-2xl overflow-hidden"
             style={{
-              display:             'grid',
               gridTemplateColumns: '60% 1fr 1fr',
               gridTemplateRows:    '178px 178px',
               gap:                 '3px',
             }}
           >
-            {/* Large main image spans 2 rows */}
             <div style={{ gridRow: '1 / 3', overflow: 'hidden' }}>
               <AtmoCell
                 src={atmo[0]} gradient={meta.gradient} emoji={meta.atmo[0]}

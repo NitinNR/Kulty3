@@ -147,11 +147,39 @@ export const EventDetailPage = () => {
     }
   };
 
-  // ── Loading / error ─────────────────────────────────────────────────────────
+  // ── Loading skeleton ────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: T.bg }}>
-        <Spinner />
+      <div className="min-h-screen" style={{ backgroundColor: T.bg }}>
+        <Navbar />
+        {/* Hero skeleton */}
+        <div className="w-full animate-pulse" style={{ height: 'clamp(320px, 45vw, 480px)', backgroundColor: '#1a1a1a' }} />
+        {/* Content skeleton */}
+        <div className="max-w-4xl mx-auto px-4 md:px-8 py-10">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="space-y-3">
+                <div className="h-6 w-44 rounded-xl animate-pulse" style={{ backgroundColor: '#1c1c1c' }} />
+                {[100, 88, 72].map((w) => (
+                  <div key={w} className="h-4 rounded-xl animate-pulse" style={{ width: `${w}%`, backgroundColor: '#1c1c1c' }} />
+                ))}
+              </div>
+              <div className="rounded-2xl p-5 space-y-4 animate-pulse" style={{ backgroundColor: '#141414' }}>
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <div className="w-9 h-9 rounded-xl flex-shrink-0" style={{ backgroundColor: '#1c1c1c' }} />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 w-16 rounded" style={{ backgroundColor: '#1c1c1c' }} />
+                      <div className="h-4 w-40 rounded" style={{ backgroundColor: '#1c1c1c' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl p-5 animate-pulse" style={{ backgroundColor: '#141414', height: '220px' }} />
+          </div>
+        </div>
+        <BottomNav />
       </div>
     );
   }
@@ -268,7 +296,7 @@ export const EventDetailPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
           {/* ── Left column ── */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="lg:col-span-2 space-y-8 order-2 lg:order-1">
 
             {/* About */}
             {event.description && (
@@ -415,8 +443,9 @@ export const EventDetailPage = () => {
           </div>
 
           {/* ── Right column — registration CTA ── */}
-          <div className="lg:col-span-1">
-            <div className="sticky top-24">
+          {/* order-1 lg:order-2 so it appears first on mobile */}
+          <div className="lg:col-span-1 order-1 lg:order-2">
+            <div className="lg:sticky lg:top-24">
 
               {/* Registration card */}
               <div
