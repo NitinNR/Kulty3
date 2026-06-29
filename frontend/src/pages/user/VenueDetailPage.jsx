@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Star, TrendingUp, ChevronRight } from 'lucide-react';
+import { ArrowLeft, MapPin, Star, TrendingUp, ChevronRight, ChevronLeft, X } from 'lucide-react';
 import { getVenue, getVenues } from '../../services/api';
 import { Spinner } from '../../components/common/Spinner';
 import { Navbar } from '../../components/layout/Navbar';
@@ -69,10 +69,16 @@ const META = {
 };
 
 // ─── Atmosphere cell ──────────────────────────────────────────────────────────
-const AtmoCell = ({ src, gradient, emoji, rounded = '' }) => (
-  <div className={`w-full h-full overflow-hidden ${rounded}`}>
+const AtmoCell = ({ src, gradient, emoji, onClick }) => (
+  <div
+    className={`w-full h-full overflow-hidden ${onClick ? 'cursor-pointer group' : ''}`}
+    onClick={onClick}
+  >
     {src ? (
-      <img src={src} alt="" className="w-full h-full object-cover" />
+      <img
+        src={src} alt=""
+        className={`w-full h-full object-cover transition-transform duration-300 ${onClick ? 'group-hover:scale-105' : ''}`}
+      />
     ) : (
       <div className={`w-full h-full bg-gradient-to-br ${gradient} flex items-center justify-center`}>
         <span className="text-4xl select-none opacity-50">{emoji}</span>
@@ -138,10 +144,11 @@ export const VenueDetailPage = () => {
   const navigate    = useNavigate();
   const { profile } = useAuth();
 
-  const [venue,   setVenue]   = useState(null);
-  const [similar, setSimilar] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');
+  const [venue,       setVenue]       = useState(null);
+  const [similar,     setSimilar]     = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState('');
+  const [lightboxIdx, setLightboxIdx] = useState(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -186,26 +193,14 @@ export const VenueDetailPage = () => {
   }
 
   // ── Derived values ──────────────────────────────────────────────────────────
-  const cat      = venue.category?.toLowerCase() || 'other';
-  const meta     = META[cat] || META.other;
-  const rating   = stableRating(venue.name);
-  const reviews  = stableReviews(venue.name);
-  const isMember = profile?.subscription?.status === 'active';
-  const atmo     = Array.from({ length: 5 }, (_, i) => venue.images?.[i] || null);
-
-  const benefits = [
-    { icon: '⚡', title: 'Priority Entry',
-      desc: 'Skip the queue and walk in with your Kulty card' },
-    { icon: '🥂', title: 'Welcome Drink',
-      desc: 'Complimentary signature drink on every visit' },
-    venue.cashbackPercentage > 0
-      ? { icon: '💸', title: `${venue.cashbackPercentage}% Cashback`,
-          desc: 'Earn cashback on your total spend at this venue' }
-      : { icon: '🎁', title: 'Member Perks',
-          desc: 'Exclusive discounts and special treatment for Kulty members' },
-    { icon: '🎟️', title: 'Event Access',
-      desc: 'First access to exclusive events hosted at this venue' },
-  ];
+  const cat        = venue.category?.toLowerCase() || 'other';
+  const meta       = META[cat] || META.other;
+  const rating     = stableRating(venue.name);
+  const reviews    = stableReviews(venue.name);
+  const isMember   = profile?.subscription?.status === 'active';
+  const realImages = venue.images?.filter(Boolean) || [];
+  const atmo       = Array.from({ length: 5 }, (_, i) => realImages[i] || null);
+  const venueBenefits = (venue.memberBenefits || []).filter(Boolean);
 
   return (
     <div className="min-h-screen pb-20 md:pb-0" style={{ backgroundColor: T.bg }}>
@@ -257,7 +252,8 @@ export const VenueDetailPage = () => {
                 </span>
               )}
 
-              {meta.tags.slice(0, 2).map((tag) => (
+              {/* Show real amenities as pills if available */}
+              {venue.amenities?.filter(Boolean).slice(0, 2).map((tag) => (
                 <span key={tag} className="text-xs font-medium px-3 py-1 rounded-full"
                   style={{ backgroundColor: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(4px)', color: 'rgba(255,255,255,0.85)' }}>
                   {tag}
@@ -303,36 +299,50 @@ export const VenueDetailPage = () => {
           </p>
         </section>
 
-        {/* ── Kulty Membership Benefits ─────────────────── */}
+        {/* ── Member Benefits at this Venue ─────────────── */}
         <section>
           <div className="rounded-2xl p-5 md:p-6"
             style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
 
-            {/* Header */}
             <div className="flex items-center gap-2.5 mb-5">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{ backgroundColor: 'rgba(245,158,11,0.15)' }}>
                 <span className="text-base">🏆</span>
               </div>
-              <h2 className="text-base font-bold text-white">Kulty Membership Benefits</h2>
+              <h2 className="text-base font-bold text-white">Member Benefits</h2>
             </div>
 
-            {/* 2-col grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {benefits.map(({ icon, title, desc }) => (
-                <div key={title} className="flex items-start gap-3 p-4 rounded-xl"
-                  style={{ backgroundColor: T.cardLite, border: `1px solid ${T.border}` }}>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: 'rgba(245,158,11,0.1)' }}>
-                    <span className="text-xl leading-none">{icon}</span>
-                  </div>
-                  <div>
-                    <p className="text-white text-sm font-semibold mb-0.5">{title}</p>
-                    <p className="text-xs leading-relaxed" style={{ color: '#777' }}>{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ul className="space-y-3">
+              {/* Cashback — always shown if set */}
+              {venue.cashbackPercentage > 0 && (
+                <li className="flex items-center gap-3">
+                  <span className="text-lg leading-none">💸</span>
+                  <p className="text-sm text-white">
+                    <span className="font-semibold">{venue.cashbackPercentage}% cashback</span> on all spends at this venue
+                  </p>
+                </li>
+              )}
+
+              {/* Venue-specific benefits from owner */}
+              {venueBenefits.length > 0
+                ? venueBenefits.map((b, i) => (
+                    <li key={i} className="flex items-center gap-3">
+                      <span className="text-xs font-bold" style={{ color: T.gold }}>✓</span>
+                      <p className="text-sm text-white">{b}</p>
+                    </li>
+                  ))
+                : /* Default fallback benefits */ [
+                    { icon: '⚡', text: 'Priority entry — skip the queue' },
+                    { icon: '🥂', text: 'Complimentary welcome drink on every visit' },
+                    { icon: '🎟️', text: 'First access to exclusive events at this venue' },
+                  ].map(({ icon, text }) => (
+                    <li key={text} className="flex items-center gap-3">
+                      <span className="text-lg leading-none">{icon}</span>
+                      <p className="text-sm text-white">{text}</p>
+                    </li>
+                  ))
+              }
+            </ul>
 
             {!isMember && (
               <button
@@ -393,7 +403,25 @@ export const VenueDetailPage = () => {
 
         {/* ── Atmosphere gallery ─────────────────────────── */}
         <section>
-          <h2 className="text-xl font-display font-bold text-white mb-4">Atmosphere</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-display font-bold text-white">
+              Gallery
+              {realImages.length > 0 && (
+                <span className="ml-2 text-sm font-normal" style={{ color: T.textSub }}>
+                  ({realImages.length} photo{realImages.length !== 1 ? 's' : ''})
+                </span>
+              )}
+            </h2>
+            {realImages.length > 0 && (
+              <button
+                onClick={() => setLightboxIdx(0)}
+                className="text-xs font-semibold transition hover:opacity-70"
+                style={{ color: T.gold }}
+              >
+                View all
+              </button>
+            )}
+          </div>
           <div
             className="rounded-2xl overflow-hidden"
             style={{
@@ -405,11 +433,17 @@ export const VenueDetailPage = () => {
           >
             {/* Large main image spans 2 rows */}
             <div style={{ gridRow: '1 / 3', overflow: 'hidden' }}>
-              <AtmoCell src={atmo[0]} gradient={meta.gradient} emoji={meta.atmo[0]} />
+              <AtmoCell
+                src={atmo[0]} gradient={meta.gradient} emoji={meta.atmo[0]}
+                onClick={atmo[0] ? () => setLightboxIdx(0) : undefined}
+              />
             </div>
             {[1, 2, 3, 4].map((i) => (
               <div key={i} style={{ overflow: 'hidden' }}>
-                <AtmoCell src={atmo[i]} gradient={meta.gradient} emoji={meta.atmo[i % meta.atmo.length]} />
+                <AtmoCell
+                  src={atmo[i]} gradient={meta.gradient} emoji={meta.atmo[i % meta.atmo.length]}
+                  onClick={atmo[i] ? () => setLightboxIdx(i) : undefined}
+                />
               </div>
             ))}
           </div>
@@ -445,6 +479,73 @@ export const VenueDetailPage = () => {
       </div>
 
       <BottomNav />
+
+      {/* ════════════════════════════════════════════════════
+          LIGHTBOX
+      ════════════════════════════════════════════════════ */}
+      {lightboxIdx !== null && realImages.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(16px)' }}
+          onClick={() => setLightboxIdx(null)}
+        >
+          {/* Close */}
+          <button
+            className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center text-white transition hover:bg-white/10"
+            onClick={() => setLightboxIdx(null)}
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Counter */}
+          <p className="absolute top-4 left-1/2 -translate-x-1/2 text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            {lightboxIdx + 1} / {realImages.length}
+          </p>
+
+          {/* Prev */}
+          {realImages.length > 1 && (
+            <button
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-white transition hover:bg-white/10 z-10"
+              onClick={(e) => { e.stopPropagation(); setLightboxIdx((lightboxIdx - 1 + realImages.length) % realImages.length); }}
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* Image */}
+          <img
+            src={realImages[lightboxIdx]}
+            alt=""
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-2xl"
+            style={{ boxShadow: '0 0 0 1px rgba(255,255,255,0.08)' }}
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          {/* Next */}
+          {realImages.length > 1 && (
+            <button
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-white transition hover:bg-white/10 z-10"
+              onClick={(e) => { e.stopPropagation(); setLightboxIdx((lightboxIdx + 1) % realImages.length); }}
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* Dot indicators */}
+          {realImages.length > 1 && (
+            <div className="absolute bottom-5 flex gap-2">
+              {realImages.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={(e) => { e.stopPropagation(); setLightboxIdx(i); }}
+                  className="w-2 h-2 rounded-full transition-all duration-200"
+                  style={{ backgroundColor: i === lightboxIdx ? '#fff' : 'rgba(255,255,255,0.25)', transform: i === lightboxIdx ? 'scale(1.3)' : 'scale(1)' }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

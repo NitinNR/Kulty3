@@ -1,7 +1,7 @@
 import axios from 'axios';
 import auth from './firebase';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -31,11 +31,13 @@ export const createVenue = (data) => api.post('/venues', data);
 export const updateVenue = (id, data) => api.put(`/venues/${id}`, data);
 export const deleteVenue = (id) => api.delete(`/venues/${id}`);
 
-export const getEvents = (params) => api.get('/events', { params });
-export const getEvent = (id) => api.get(`/events/${id}`);
-export const createEvent = (data) => api.post('/events', data);
-export const updateEvent = (id, data) => api.put(`/events/${id}`, data);
-export const deleteEvent = (id) => api.delete(`/events/${id}`);
+export const getEvents       = (params) => api.get('/events', { params });
+export const getEvent        = (id)     => api.get(`/events/${id}`);
+export const createEvent     = (data)   => api.post('/events', data);
+export const updateEvent     = (id, data) => api.put(`/events/${id}`, data);
+export const deleteEvent     = (id)     => api.delete(`/events/${id}`);
+export const registerEvent   = (id)     => api.post(`/events/${id}/register`);
+export const unregisterEvent = (id)     => api.delete(`/events/${id}/register`);
 
 export const scanQREntry = (data) => api.post('/entries/scan', data);
 export const getMyEntries = () => api.get('/entries/my');

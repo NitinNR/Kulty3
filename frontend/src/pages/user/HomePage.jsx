@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Search, MapPin, Star, Heart, ChevronRight,
   LayoutGrid, Utensils, Music, Leaf, Coffee, Wine, GlassWater,
-  Compass, Camera, AtSign, Zap, Gift, Ticket,
+  Compass, Camera, AtSign, CreditCard, CalendarDays,
 } from 'lucide-react';
 import { getVenues, getEvents } from '../../services/api';
 import { Navbar } from '../../components/layout/Navbar';
@@ -60,7 +60,8 @@ const VenueCard = ({ venue, onClick }) => {
   const CatIcon = CATS.find((c) => c.value === cat)?.Icon || LayoutGrid;
   const rating  = stableRating(venue.name);
   const price   = '₹'.repeat(stablePrice(venue.name));
-  const tags    = meta.tags.slice(0, 2);
+  // Use real amenities if set; otherwise nothing (no static filler tags)
+  const tags    = venue.amenities?.filter(Boolean).slice(0, 2) || [];
 
   return (
     <div
@@ -157,85 +158,100 @@ const VenueCard = ({ venue, onClick }) => {
   );
 };
 
-// ─── Membership card widget ───────────────────────────────────────────────────
-const MembershipCardWidget = ({ profile, onClick }) => (
-  <div
-    onClick={onClick}
-    className="rounded-2xl p-6 relative overflow-hidden cursor-pointer hover:opacity-90 transition"
-    style={{
-      background: 'linear-gradient(135deg, #2d2610 0%, #1a1709 45%, #141206 100%)',
-      border: '1px solid rgba(245,158,11,0.18)',
-    }}
-  >
-    {/* Decorative rings */}
-    <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full pointer-events-none"
-      style={{ border: '1.5px solid rgba(245,158,11,0.12)' }} />
-    <div className="absolute -bottom-10 -right-10 w-40 h-40 rounded-full pointer-events-none"
-      style={{ border: '1.5px solid rgba(245,158,11,0.06)' }} />
+// ─── Membership summary widget ────────────────────────────────────────────────
+const MembershipSummary = ({ profile, venueCount, onCardClick, onEventsClick }) => {
+  const start = profile?.subscription?.startDate ? new Date(profile.subscription.startDate) : null;
+  const end   = profile?.subscription?.endDate   ? new Date(profile.subscription.endDate)   : null;
+  const progress = (start && end)
+    ? Math.min(100, Math.max(0, Math.round(((Date.now() - start) / (end - start)) * 100)))
+    : 0;
+  const monthsLeft = (end && end > Date.now())
+    ? Math.ceil((end - Date.now()) / (1000 * 60 * 60 * 24 * 30))
+    : 0;
 
-    {/* Sound-wave bars top-right */}
-    <div className="absolute top-5 right-5 flex items-center gap-0.5 pointer-events-none opacity-50">
-      {[3, 6, 9, 6, 3].map((h, i) => (
-        <div key={i} className="w-0.5 rounded-full"
-          style={{ height: `${h * 2.5}px`, backgroundColor: T.gold }} />
-      ))}
-    </div>
+  const fmtDate = (d) => d
+    ? d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '—';
 
-    <div className="relative">
-      <p className="text-xs tracking-[0.22em] uppercase mb-2" style={{ color: 'rgba(245,158,11,0.55)' }}>
-        My Membership Card
-      </p>
-      <p className="text-white font-semibold text-lg mb-5">{profile?.name || 'Member'}</p>
-
-      <p className="text-xs tracking-[0.15em] uppercase mb-1" style={{ color: T.dim }}>
-        Membership ID
-      </p>
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-mono text-white text-sm tracking-wider">
-          {profile?.membershipId || 'KULTY000000'}
-        </p>
+  return (
+    <div
+      className="rounded-2xl overflow-hidden"
+      style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
+    >
+      {/* Top bar */}
+      <div
+        className="px-5 py-4 flex items-center justify-between"
+        style={{ borderBottom: `1px solid ${T.border}` }}
+      >
+        <div>
+          <p className="text-xs font-bold tracking-[0.18em] uppercase" style={{ color: T.gold }}>
+            Gold Elite
+          </p>
+          <p className="text-white font-semibold text-sm mt-0.5 truncate max-w-[160px]">
+            {profile?.name || 'Member'}
+          </p>
+        </div>
         <span
-          className="text-xs px-2.5 py-1 rounded font-bold tracking-wider flex-shrink-0"
-          style={{ border: '1px solid rgba(245,158,11,0.35)', color: 'rgba(245,158,11,0.85)', backgroundColor: 'rgba(245,158,11,0.06)' }}
+          className="text-xs font-bold tracking-[0.12em] px-2.5 py-1 rounded-full"
+          style={{ backgroundColor: 'rgba(34,197,94,0.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.2)' }}
         >
-          VALUED MEMBER
+          ACTIVE
         </span>
       </div>
-    </div>
-  </div>
-);
 
-// ─── Member benefits ──────────────────────────────────────────────────────────
-const BENEFITS = [
-  { Icon: Zap,    title: 'Priority Booking',    desc: 'Skip the queue at top venues' },
-  { Icon: Gift,   title: 'Free Welcome Drink',  desc: 'Every visit, every venue'     },
-  { Icon: Ticket, title: 'Event Access',         desc: 'Exclusive invites & previews' },
-  { Icon: Star,   title: 'Cashback Rewards',     desc: 'Earn % back on every bill'    },
-];
-
-const MemberBenefits = ({ collapsed, onToggle }) => (
-  <div>
-    <div className="flex items-center justify-between mb-4">
-      <h2 className="text-base font-bold text-white">Member Benefits</h2>
-      <button onClick={onToggle} className="text-sm font-medium transition hover:opacity-70"
-        style={{ color: T.gold }}>
-        Details {collapsed ? '↓' : '↑'}
-      </button>
-    </div>
-    {!collapsed && (
-      <div className="grid grid-cols-2 gap-3">
-        {BENEFITS.map(({ Icon, title, desc }) => (
-          <div key={title} className="p-4 rounded-xl"
-            style={{ backgroundColor: T.cardLite, border: `1px solid ${T.border}` }}>
-            <Icon className="w-5 h-5 mb-2.5" style={{ color: T.gold }} />
-            <p className="text-white text-sm font-semibold mb-1">{title}</p>
-            <p className="text-xs leading-relaxed" style={{ color: T.dim }}>{desc}</p>
+      {/* Dates row */}
+      <div className="grid grid-cols-2 divide-x px-0" style={{ borderBottom: `1px solid ${T.border}` }}>
+        {[{ label: 'Member Since', val: fmtDate(start) }, { label: 'Valid Until', val: fmtDate(end) }].map(({ label, val }) => (
+          <div key={label} className="px-5 py-3.5" style={{ borderColor: T.border }}>
+            <p className="text-xs uppercase tracking-[0.12em] mb-1" style={{ color: T.dim }}>{label}</p>
+            <p className="text-sm font-semibold text-white">{val}</p>
           </div>
         ))}
       </div>
-    )}
-  </div>
-);
+
+      {/* Progress */}
+      <div className="px-5 py-4" style={{ borderBottom: `1px solid ${T.border}` }}>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs" style={{ color: T.sub }}>Membership Progress</p>
+          <p className="text-xs font-semibold" style={{ color: monthsLeft > 3 ? T.gold : '#f87171' }}>
+            {monthsLeft > 0 ? `${monthsLeft}mo left` : 'Expired'}
+          </p>
+        </div>
+        <div className="w-full rounded-full overflow-hidden" style={{ height: '4px', backgroundColor: T.cardLite }}>
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{ width: `${progress}%`, backgroundColor: progress > 85 ? '#f87171' : T.gold }}
+          />
+        </div>
+      </div>
+
+      {/* Quick links */}
+      <div className="grid grid-cols-2 gap-3 p-4">
+        <button
+          onClick={onCardClick}
+          className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition hover:opacity-80"
+          style={{ backgroundColor: T.gold, color: '#0d0d0d' }}
+        >
+          <CreditCard className="w-4 h-4" /> My Card
+        </button>
+        <button
+          onClick={onEventsClick}
+          className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition hover:opacity-80"
+          style={{ backgroundColor: T.cardLite, color: 'rgba(255,255,255,0.8)', border: `1px solid ${T.border}` }}
+        >
+          <CalendarDays className="w-4 h-4" /> Events
+        </button>
+      </div>
+
+      {/* Footer */}
+      {venueCount > 0 && (
+        <p className="text-center text-xs pb-4" style={{ color: T.dim }}>
+          {venueCount} partner venue{venueCount !== 1 ? 's' : ''} available
+        </p>
+      )}
+    </div>
+  );
+};
 
 // ─── Footer (desktop only) ────────────────────────────────────────────────────
 const FOOTER_COLS = [
@@ -303,8 +319,7 @@ export const HomePage = () => {
   const [loading,   setLoading]   = useState(true);
   const [search,    setSearch]    = useState('');
   const [category,  setCategory]  = useState('all');
-  const [benefitsCollapsed, setBenefitsCollapsed] = useState(false);
-  const navigate                  = useNavigate();
+const navigate                  = useNavigate();
   const { profile }               = useAuth();
 
   const isMember   = profile?.subscription?.status === 'active';
@@ -383,23 +398,27 @@ export const HomePage = () => {
               />
             </div>
 
-            {/* Membership card — mobile inline (between search and categories) */}
+            {/* Membership summary — mobile inline */}
             {isMember && (
               <div className="mb-6 lg:hidden">
-                <MembershipCardWidget
+                <MembershipSummary
                   profile={profile}
-                  onClick={() => navigate('/card')}
+                  venueCount={venues.length}
+                  onCardClick={() => navigate('/card')}
+                  onEventsClick={() => navigate('/events')}
                 />
               </div>
             )}
           </div>
 
-          {/* ── Right: membership card — desktop only ── */}
+          {/* ── Right: membership summary — desktop only ── */}
           {isMember ? (
             <div className="hidden lg:block">
-              <MembershipCardWidget
+              <MembershipSummary
                 profile={profile}
-                onClick={() => navigate('/card')}
+                venueCount={venues.length}
+                onCardClick={() => navigate('/card')}
+                onEventsClick={() => navigate('/events')}
               />
             </div>
           ) : (
@@ -499,18 +518,6 @@ export const HomePage = () => {
                 onClick={() => navigate(`/venues/${venue._id}`)}
               />
             ))}
-          </div>
-        )}
-
-        {/* ════════════════════════════════════════════════════
-            MEMBER BENEFITS
-        ════════════════════════════════════════════════════ */}
-        {isMember && (
-          <div className="mb-12">
-            <MemberBenefits
-              collapsed={benefitsCollapsed}
-              onToggle={() => setBenefitsCollapsed((v) => !v)}
-            />
           </div>
         )}
 

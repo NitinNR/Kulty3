@@ -1,16 +1,15 @@
-import { Compass, Search, CreditCard, User } from 'lucide-react';
+import { Compass, CalendarDays, CreditCard, User } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 const NAV_ITEMS = [
-  { path: '/home',    icon: Compass,     label: 'Discover'    },
-  { path: '/home',    icon: Search,      label: 'Search'      },
-  { path: '/card',    icon: CreditCard,  label: 'Membership'  },
-  { path: '/profile', icon: User,        label: 'Profile'     },
+  { path: '/home',    icon: Compass,      label: 'Discover'   },
+  { path: '/events',  icon: CalendarDays, label: 'Events'     },
+  { path: '/card',    icon: CreditCard,   label: 'Membership' },
+  { path: '/profile', icon: User,         label: 'Profile'    },
 ];
 
 export const BottomNav = () => {
-  const location  = useLocation();
-  const isActive  = (p) => location.pathname === p;
+  const { pathname } = useLocation();
 
   return (
     <div
@@ -18,8 +17,8 @@ export const BottomNav = () => {
       style={{ backgroundColor: '#0d0d0d', borderTop: '1px solid rgba(255,255,255,0.08)' }}
     >
       <div className="flex">
-        {NAV_ITEMS.map(({ path, icon: Icon, label }, i) => {
-          const active = isActive(path) && (label !== 'Search' || i === 0 ? isActive(path) : false);
+        {NAV_ITEMS.map(({ path, icon: Icon, label }) => {
+          const active = pathname === path;
           return (
             <Link
               key={label}

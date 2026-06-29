@@ -6,9 +6,9 @@ import { useAuth } from '../../hooks/useAuth';
 
 const NAV_LINKS = [
   { label: 'Venues',     href: '/home'    },
-  { label: 'Events',     href: '/home'    },
+  { label: 'Events',     href: '/events'  },
   { label: 'Membership', href: '/card'    },
-  { label: 'Support',    href: '/profile' },
+  { label: 'Profile',    href: '/profile' },
 ];
 
 export const Navbar = () => {
@@ -75,7 +75,7 @@ export const Navbar = () => {
                 key={label}
                 to={href}
                 className={`text-sm font-medium transition-colors ${
-                  location.pathname === href && label !== 'Support'
+                  location.pathname === href
                     ? 'text-white'
                     : 'text-gray-500 hover:text-white'
                 }`}

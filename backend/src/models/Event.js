@@ -14,6 +14,10 @@ const eventSchema = new mongoose.Schema({
     enum: ['upcoming', 'ongoing', 'past'],
     default: 'upcoming'
   },
+  registrations: [{
+    userId:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    registeredAt:   { type: Date, default: Date.now },
+  }],
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

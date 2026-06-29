@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    host: true,          // bind to 0.0.0.0 so other devices can reach Vite
     proxy: {
       '/api': {
         target: 'http://localhost:5000',
