@@ -49,7 +49,7 @@ const RootRedirect = () => {
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (!profile) return null;
   if (profile.role === 'admin') return <Navigate to="/admin" replace />;
-  if (profile.role === 'venue_owner') return <Navigate to="/venue" replace />;
+  if (profile.role === 'venue_owner' || profile.role === 'venue_staff') return <Navigate to="/venue" replace />;
   if (!profile.name) return <Navigate to="/complete-profile" replace />;
   if (profile.subscription?.status === 'active') return <Navigate to="/home" replace />;
   if (!profile.intentRole) return <Navigate to="/choose-path" replace />;
@@ -91,11 +91,11 @@ export default function App() {
             <Route path="/admin/bills" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminBillsPage /></RoleRoute></ProtectedRoute>} />
             <Route path="/admin/applications" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminApplicationsPage /></RoleRoute></ProtectedRoute>} />
 
-            {/* Venue owner portal */}
-            <Route path="/venue" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner']}><VenueDashboard /></RoleRoute></ProtectedRoute>} />
-            <Route path="/venue/scanner" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner']}><ScannerPage /></RoleRoute></ProtectedRoute>} />
-            <Route path="/venue/entries" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner']}><VenueEntriesPage /></RoleRoute></ProtectedRoute>} />
-            <Route path="/venue/bills" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner']}><VenueBillsPage /></RoleRoute></ProtectedRoute>} />
+            {/* Venue owner portal — dashboard/scanner/entries/bills allow staff too */}
+            <Route path="/venue" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner', 'venue_staff']}><VenueDashboard /></RoleRoute></ProtectedRoute>} />
+            <Route path="/venue/scanner" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner', 'venue_staff']}><ScannerPage /></RoleRoute></ProtectedRoute>} />
+            <Route path="/venue/entries" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner', 'venue_staff']}><VenueEntriesPage /></RoleRoute></ProtectedRoute>} />
+            <Route path="/venue/bills" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner', 'venue_staff']}><VenueBillsPage /></RoleRoute></ProtectedRoute>} />
             <Route path="/venue/settings" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner']}><VenueSettingsPage /></RoleRoute></ProtectedRoute>} />
 
             {/* Root smart redirect */}

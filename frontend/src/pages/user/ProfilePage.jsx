@@ -4,7 +4,7 @@ import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
 import { MembershipCard } from '../../components/card/MembershipCard';
 import { format } from 'date-fns';
-import { CreditCard, LogOut, CalendarDays, Clock, ChevronRight } from 'lucide-react';
+import { CreditCard, LogOut, CalendarDays, Clock, ChevronRight, Receipt } from 'lucide-react';
 
 const T = {
   bg:       '#0d0d0d',
@@ -137,6 +137,27 @@ export const ProfilePage = () => {
               {profile.membershipId}
             </p>
           </div>
+        )}
+
+        {/* ── Visit History link ── */}
+        {isActive && (
+          <button
+            onClick={() => navigate('/entries')}
+            className="w-full flex items-center gap-4 rounded-2xl px-5 py-4 mb-3 transition hover:opacity-80"
+            style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
+          >
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: 'rgba(245,158,11,0.1)' }}
+            >
+              <Receipt className="w-4 h-4" style={{ color: T.gold }} />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-semibold text-white">Visit History & Cashback</p>
+              <p className="text-xs mt-0.5" style={{ color: T.sub }}>Upload bills and track cashback</p>
+            </div>
+            <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: T.dim }} />
+          </button>
         )}
 
         {/* ── Sign out ── */}

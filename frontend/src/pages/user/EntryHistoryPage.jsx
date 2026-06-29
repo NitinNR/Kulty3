@@ -1,225 +1,439 @@
-import { useState, useEffect } from 'react';
-import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef, useContext } from 'react';
+import {
+  Upload, Camera, CheckCircle2, XCircle, Clock,
+  Receipt, Banknote, ChevronDown, ChevronUp, MapPin, X,
+} from 'lucide-react';
 import { getMyEntries, uploadBill } from '../../services/api';
 import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
-import { Badge } from '../../components/common/Badge';
-import { Button } from '../../components/common/Button';
-import { Modal } from '../../components/common/Modal';
-import { Input } from '../../components/common/Input';
-import { Spinner } from '../../components/common/Spinner';
-import { useContext } from 'react';
 import { ToastContext } from '../../contexts/ToastContext';
+import { format } from 'date-fns';
+
+const T = {
+  bg:       '#0d0d0d',
+  card:     '#141414',
+  lite:     '#1c1c1c',
+  border:   'rgba(255,255,255,0.07)',
+  gold:     '#f59e0b',
+  text:     'rgba(255,255,255,0.85)',
+  muted:    'rgba(255,255,255,0.4)',
+  dim:      'rgba(255,255,255,0.22)',
+};
+
+const compressToBase64 = (file) =>
+  new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1400;
+      let { naturalWidth: w, naturalHeight: h } = img;
+      const r = Math.min(MAX / w, MAX / h, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(w * r);
+      canvas.height = Math.round(h * r);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.src = URL.createObjectURL(file);
+  });
+
+const StatusBadge = ({ status }) => {
+  const map = {
+    pending:  { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b',  icon: Clock,         label: 'Pending'  },
+    approved: { bg: 'rgba(16,185,129,0.12)', color: '#10b981',  icon: CheckCircle2,  label: 'Approved' },
+    rejected: { bg: 'rgba(239,68,68,0.12)',  color: '#ef4444',  icon: XCircle,       label: 'Rejected' },
+  };
+  const s = map[status] || map.pending;
+  const Icon = s.icon;
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full"
+      style={{ backgroundColor: s.bg, color: s.color }}
+    >
+      <Icon className="w-3 h-3" />
+      {s.label}
+    </span>
+  );
+};
 
 export const EntryHistoryPage = () => {
-  const [entries, setEntries] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedEntry, setSelectedEntry] = useState(null);
+  const [entries, setEntries]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [expanded, setExpanded]     = useState({});
+  const [modal, setModal]           = useState(null);   // entry | null
+  const [billFile, setBillFile]     = useState(null);
+  const [billPreview, setBillPreview] = useState(null);
   const [billAmount, setBillAmount] = useState('');
-  const [billImage, setBillImage] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const toast = useContext(ToastContext);
+  const [uploading, setUploading]   = useState(false);
+  const fileRef   = useRef(null);
+  const cameraRef = useRef(null);
+  const toast     = useContext(ToastContext);
 
   useEffect(() => {
-    const fetchEntries = async () => {
-      try {
-        setLoading(true);
-        const res = await getMyEntries();
-        setEntries(res.data);
-      } catch (err) {
-        console.error('Failed to fetch entries:', err);
-        toast?.showError('Failed to load entries');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEntries();
+    getMyEntries()
+      .then((r) => setEntries(r.data))
+      .catch(() => toast?.showError?.('Failed to load visit history'))
+      .finally(() => setLoading(false));
   }, []);
 
-  const toBase64 = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  const toggle = (id) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
 
-  const handleBillUpload = async () => {
-    if (!billImage || !billAmount) {
-      toast?.showError('Please select an image and enter amount');
+  const openModal = (entry) => {
+    setModal(entry);
+    setBillFile(null);
+    setBillPreview(null);
+    setBillAmount('');
+  };
+
+  const closeModal = () => {
+    setModal(null);
+    setBillPreview(null);
+  };
+
+  const pickFile = (file) => {
+    if (!file) return;
+    setBillFile(file);
+    setBillPreview(URL.createObjectURL(file));
+  };
+
+  const submitBill = async () => {
+    if (!billFile || !billAmount) {
+      toast?.showError?.('Please add a photo and enter the amount');
       return;
     }
-
     try {
       setUploading(true);
-      const imageUrl = await toBase64(billImage);
-      await uploadBill(selectedEntry._id, { imageUrl, amount: Number(billAmount) });
-      toast?.showSuccess('Bill uploaded successfully');
-
-      setEntries(entries.map(e =>
-        e._id === selectedEntry._id
-          ? { ...e, bills: [...(e.bills || []), { amount: billAmount, status: 'pending' }] }
-          : e
-      ));
-
-      setSelectedEntry(null);
-      setBillAmount('');
-      setBillImage(null);
+      const imageUrl = await compressToBase64(billFile);
+      const res = await uploadBill(modal._id, { imageUrl, amount: Number(billAmount) });
+      // Preserve populated venueId — only update bills array from response
+      setEntries((prev) =>
+        prev.map((e) => e._id === modal._id ? { ...e, bills: res.data.bills } : e)
+      );
+      toast?.showSuccess?.('Bill submitted! Awaiting venue approval.');
+      closeModal();
     } catch (err) {
-      console.error('Failed to upload bill:', err);
-      toast?.showError('Failed to upload bill');
+      toast?.showError?.(err.response?.data?.error || 'Upload failed');
     } finally {
       setUploading(false);
     }
   };
 
+  const totalCashback = entries.reduce(
+    (sum, e) => sum + (e.cashback?.amount || 0),
+    0
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col pb-20 md:pb-0">
+    <div className="min-h-screen pb-24 md:pb-10" style={{ backgroundColor: T.bg }}>
       <Navbar />
 
-      <div className="flex-1 max-w-7xl mx-auto w-full px-4 py-12">
-        <div className="mb-12">
-          <h1 className="text-4xl font-display font-bold text-gray-900 mb-2">
-            Entry History
-          </h1>
-          <p className="text-gray-600">
-            View all your venue check-ins and upload bills for cashback
+      <div className="max-w-2xl mx-auto px-4 py-8">
+
+        {/* Page header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold" style={{ color: T.text }}>Visit History</h1>
+          <p className="text-sm mt-1" style={{ color: T.muted }}>
+            Upload bills from your venue visits to earn cashback
           </p>
         </div>
 
+        {/* Cashback earned banner */}
+        {totalCashback > 0 && (
+          <div
+            className="rounded-2xl p-5 mb-6 flex items-center gap-4"
+            style={{ backgroundColor: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}
+          >
+            <div
+              className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: 'rgba(245,158,11,0.12)' }}
+            >
+              <Banknote className="w-5 h-5" style={{ color: T.gold }} />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(245,158,11,0.55)' }}>
+                Total Cashback Earned
+              </p>
+              <p className="text-2xl font-bold" style={{ color: T.gold }}>₹{totalCashback}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Entry list */}
         {loading ? (
-          <div className="flex justify-center py-12">
-            <Spinner />
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-2xl h-20 animate-pulse" style={{ backgroundColor: T.card }} />
+            ))}
           </div>
         ) : entries.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg">
-            <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 mb-2">No check-ins yet</p>
-            <p className="text-sm text-gray-500">
-              Visit a venue and scan your membership card to get started
+          <div
+            className="rounded-2xl p-12 text-center"
+            style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
+          >
+            <Receipt className="w-10 h-10 mx-auto mb-3 opacity-20" style={{ color: T.gold }} />
+            <p className="font-semibold mb-1" style={{ color: T.text }}>No visits yet</p>
+            <p className="text-sm" style={{ color: T.muted }}>
+              Visit a venue and let staff scan your Kulty card to check in
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {entries.map((entry) => (
-              <div key={entry._id} className="bg-white rounded-lg p-6 shadow-sm">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {entry.venueId?.name || 'Unknown Venue'}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      {new Date(entry.scannedAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <Badge variant="success">Checked In</Badge>
-                </div>
+          <div className="space-y-3">
+            {entries.map((entry) => {
+              const bills     = entry.bills || [];
+              const pending   = bills.filter((b) => b.status === 'pending').length;
+              const cashback  = entry.cashback?.amount || 0;
+              const isOpen    = expanded[entry._id];
+              const venue     = entry.venueId;
 
-                <div className="mb-4">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Bills</p>
-                  {entry.bills && entry.bills.length > 0 ? (
-                    <div className="space-y-2">
-                      {entry.bills.map((bill, idx) => (
-                        <div
-                          key={idx}
-                          className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              ₹{bill.amount}
-                            </p>
-                            <Badge
-                              variant={
-                                bill.status === 'approved'
-                                  ? 'success'
-                                  : bill.status === 'rejected'
-                                    ? 'danger'
-                                    : 'warning'
-                              }
-                            >
-                              {bill.status}
-                            </Badge>
-                          </div>
-                          {bill.status === 'approved' && (
-                            <CheckCircle className="w-5 h-5 text-green-600" />
+              return (
+                <div
+                  key={entry._id}
+                  className="rounded-2xl overflow-hidden"
+                  style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
+                >
+                  {/* Header row */}
+                  <div className="p-4">
+                    <div className="flex items-center gap-3">
+                      {/* Venue avatar */}
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm"
+                        style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: T.gold }}
+                      >
+                        {venue?.name?.[0]?.toUpperCase() || 'V'}
+                      </div>
+
+                      {/* Venue info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate text-sm" style={{ color: T.text }}>
+                          {venue?.name || 'Unknown Venue'}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          {venue?.city && (
+                            <span className="text-xs flex items-center gap-0.5" style={{ color: T.muted }}>
+                              <MapPin className="w-3 h-3" />{venue.city}
+                            </span>
                           )}
+                          <span className="text-xs" style={{ color: T.dim }}>
+                            {format(new Date(entry.scannedAt), 'dd MMM yyyy, hh:mm a')}
+                          </span>
                         </div>
-                      ))}
+                      </div>
+
+                      {/* Right side */}
+                      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                        {cashback > 0 ? (
+                          <span className="text-sm font-bold" style={{ color: '#10b981' }}>
+                            +₹{cashback}
+                          </span>
+                        ) : pending > 0 ? (
+                          <span
+                            className="text-xs px-2 py-1 rounded-full font-medium"
+                            style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: T.gold }}
+                          >
+                            {pending} pending
+                          </span>
+                        ) : bills.length === 0 ? (
+                          <button
+                            onClick={() => openModal(entry)}
+                            className="text-xs font-bold px-3 py-1.5 rounded-lg"
+                            style={{ backgroundColor: T.gold, color: '#0d0d0d' }}
+                          >
+                            Upload Bill
+                          </button>
+                        ) : null}
+
+                        {bills.length > 0 && (
+                          <button
+                            onClick={() => toggle(entry._id)}
+                            className="flex items-center gap-0.5 text-xs"
+                            style={{ color: T.dim }}
+                          >
+                            {bills.length} bill{bills.length !== 1 ? 's' : ''}
+                            {isOpen
+                              ? <ChevronUp className="w-3.5 h-3.5" />
+                              : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">No bills uploaded yet</p>
+                  </div>
+
+                  {/* Expanded bills */}
+                  {isOpen && (
+                    <div style={{ borderTop: `1px solid ${T.border}`, padding: '12px 16px 16px' }}>
+                      <div className="space-y-2">
+                        {bills.map((bill, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-3 rounded-xl p-3"
+                            style={{ backgroundColor: T.lite }}
+                          >
+                            {bill.imageUrl ? (
+                              <img
+                                src={bill.imageUrl}
+                                alt="bill"
+                                className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                                style={{ border: `1px solid ${T.border}` }}
+                              />
+                            ) : (
+                              <div
+                                className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
+                                style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: `1px dashed ${T.border}` }}
+                              >
+                                <Receipt className="w-4 h-4" style={{ color: T.dim }} />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-sm" style={{ color: T.text }}>₹{bill.amount}</p>
+                              {bill.uploadedAt && (
+                                <p className="text-xs mt-0.5" style={{ color: T.dim }}>
+                                  {format(new Date(bill.uploadedAt), 'dd MMM, hh:mm a')}
+                                </p>
+                              )}
+                              {bill.note && (
+                                <p className="text-xs mt-1 italic" style={{ color: T.muted }}>"{bill.note}"</p>
+                              )}
+                            </div>
+                            <StatusBadge status={bill.status} />
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => openModal(entry)}
+                        className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium"
+                        style={{
+                          backgroundColor: 'rgba(245,158,11,0.05)',
+                          border: '1px dashed rgba(245,158,11,0.22)',
+                          color: T.gold,
+                        }}
+                      >
+                        <Upload className="w-4 h-4" />
+                        Add another bill
+                      </button>
+                    </div>
                   )}
                 </div>
-
-                <Button
-                  onClick={() => setSelectedEntry(entry)}
-                  variant="primary"
-                  size="sm"
-                >
-                  <Upload className="w-4 h-4" />
-                  Upload Bill
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
-      <Modal
-        isOpen={!!selectedEntry}
-        onClose={() => setSelectedEntry(null)}
-        title="Upload Bill"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">
-            Upload your receipt for {selectedEntry?.venueId?.name}
-          </p>
+      {/* ── Upload modal ── */}
+      {modal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl p-6"
+            style={{ backgroundColor: '#1a1a1a', border: `1px solid ${T.border}` }}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <p className="font-bold text-white">Upload Bill</p>
+                <p className="text-xs mt-0.5" style={{ color: T.muted }}>
+                  {modal.venueId?.name || 'Venue'} •{' '}
+                  {format(new Date(modal.scannedAt), 'dd MMM yyyy')}
+                </p>
+              </div>
+              <button
+                onClick={closeModal}
+                className="w-8 h-8 flex items-center justify-center rounded-full"
+                style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: T.muted }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Bill Image
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setBillImage(e.target.files[0])}
-              className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg"
-              disabled={uploading}
-            />
-          </div>
+            {/* Image picker */}
+            {billPreview ? (
+              <div className="relative rounded-xl overflow-hidden mb-4" style={{ aspectRatio: '4/3' }}>
+                <img src={billPreview} alt="Bill preview" className="w-full h-full object-cover" />
+                <button
+                  onClick={() => { setBillFile(null); setBillPreview(null); }}
+                  className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: 'rgba(0,0,0,0.65)', color: '#fff' }}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <button
+                  onClick={() => cameraRef.current?.click()}
+                  className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl transition"
+                  style={{ backgroundColor: T.lite, border: `1px dashed ${T.border}`, color: T.muted }}
+                >
+                  <Camera className="w-6 h-6" />
+                  <span className="text-xs font-medium">Take Photo</span>
+                </button>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl transition"
+                  style={{ backgroundColor: T.lite, border: `1px dashed ${T.border}`, color: T.muted }}
+                >
+                  <Upload className="w-6 h-6" />
+                  <span className="text-xs font-medium">Choose File</span>
+                </button>
+              </div>
+            )}
 
-          <Input
-            label="Amount (₹)"
-            type="number"
-            value={billAmount}
-            onChange={(e) => setBillAmount(e.target.value)}
-            placeholder="0"
-            disabled={uploading}
-          />
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={(e) => pickFile(e.target.files[0])} />
+            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+              onChange={(e) => pickFile(e.target.files[0])} />
 
-          <div className="flex gap-3">
-            <Button
-              onClick={() => setSelectedEntry(null)}
-              variant="secondary"
-              size="md"
-              className="flex-1"
-              disabled={uploading}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBillUpload}
-              variant="primary"
-              size="md"
-              className="flex-1"
-              disabled={uploading || !billImage || !billAmount}
-            >
-              {uploading ? <Spinner size="sm" /> : 'Upload Bill'}
-            </Button>
+            {/* Amount */}
+            <div className="mb-5">
+              <label className="text-xs font-semibold uppercase tracking-wider mb-2 block" style={{ color: T.muted }}>
+                Total Bill Amount
+              </label>
+              <div className="relative">
+                <span
+                  className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-sm"
+                  style={{ color: T.muted }}
+                >₹</span>
+                <input
+                  type="number"
+                  value={billAmount}
+                  onChange={(e) => setBillAmount(e.target.value)}
+                  placeholder="0"
+                  min="1"
+                  className="w-full pl-8 pr-4 py-3.5 rounded-xl text-sm outline-none font-semibold"
+                  style={{ backgroundColor: T.lite, border: `1px solid ${T.border}`, color: T.text }}
+                  disabled={uploading}
+                />
+              </div>
+              <p className="text-xs mt-1.5" style={{ color: T.dim }}>
+                Cashback is calculated based on venue's cashback percentage
+              </p>
+            </div>
+
+            {/* Submit row */}
+            <div className="flex gap-3">
+              <button
+                onClick={closeModal}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold"
+                style={{ backgroundColor: T.lite, color: T.muted }}
+                disabled={uploading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitBill}
+                className="flex-1 py-3 rounded-xl text-sm font-bold disabled:opacity-50 transition"
+                style={{ backgroundColor: T.gold, color: '#0d0d0d' }}
+                disabled={uploading || !billFile || !billAmount}
+              >
+                {uploading ? 'Uploading…' : 'Submit Bill'}
+              </button>
+            </div>
           </div>
         </div>
-      </Modal>
+      )}
 
       <BottomNav />
     </div>

@@ -1,5 +1,6 @@
 import express from 'express';
 import Venue from '../models/Venue.js';
+import User from '../models/User.js';
 import { authenticateToken, optionalAuth } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 
@@ -37,16 +38,26 @@ router.get('/', optionalAuth, async (req, res) => {
 });
 
 // Venue owner or staff fetches their venue(s)
-router.get('/my/venue', authenticateToken, requireRole(['venue_owner']), async (req, res) => {
+// Also handles legacy staff whose role was set before venue_staff role existed
+router.get('/my/venue', authenticateToken, async (req, res) => {
   try {
-    const email = req.userDoc.email?.toLowerCase();
-    // Return venues where user is owner OR listed as staff
+    const userDoc = await User.findOne({ firebaseUid: req.user.uid });
+    if (!userDoc) return res.status(401).json({ error: 'User not found' });
+
+    const email = userDoc.email?.toLowerCase();
+
     const venues = await Venue.find({
       $or: [
-        { ownerId: req.userDoc._id },
+        { ownerId: userDoc._id },
         { staff: email },
       ],
     });
+
+    // Lazy role upgrade: if user is in a venue's staff list but still has 'user' role, fix it
+    if (userDoc.role === 'user' && venues.some((v) => v.staff?.includes(email))) {
+      await User.findByIdAndUpdate(userDoc._id, { role: 'venue_staff' });
+    }
+
     res.json({ venues });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch venue' });
@@ -119,8 +130,16 @@ router.post('/:id/staff', authenticateToken, requireRole(['venue_owner']), async
     if (venue.staff.includes(email.toLowerCase())) {
       return res.status(409).json({ error: 'Staff member already added' });
     }
-    venue.staff.push(email.toLowerCase().trim());
+    const staffEmail = email.toLowerCase().trim();
+    venue.staff.push(staffEmail);
     await venue.save();
+
+    // Upgrade user's role to venue_staff so they can access scanner routes
+    await User.findOneAndUpdate(
+      { email: staffEmail },
+      { $set: { role: 'venue_staff' } }
+    );
+
     res.json({ message: 'Staff added', staff: venue.staff });
   } catch (error) {
     res.status(500).json({ error: 'Failed to add staff' });
@@ -135,8 +154,19 @@ router.delete('/:id/staff/:email', authenticateToken, requireRole(['venue_owner'
     if (venue.ownerId.toString() !== req.userDoc._id.toString()) {
       return res.status(403).json({ error: 'Not your venue' });
     }
-    venue.staff = venue.staff.filter((e) => e !== decodeURIComponent(req.params.email));
+    const removedEmail = decodeURIComponent(req.params.email);
+    venue.staff = venue.staff.filter((e) => e !== removedEmail);
     await venue.save();
+
+    // Revert role to 'user' if this person is not staff at any other venue
+    const stillStaff = await Venue.findOne({ staff: removedEmail });
+    if (!stillStaff) {
+      await User.findOneAndUpdate(
+        { email: removedEmail },
+        { $set: { role: 'user' } }
+      );
+    }
+
     res.json({ message: 'Staff removed', staff: venue.staff });
   } catch (error) {
     res.status(500).json({ error: 'Failed to remove staff' });

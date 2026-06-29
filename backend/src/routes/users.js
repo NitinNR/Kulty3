@@ -19,11 +19,11 @@ router.get('/me', authenticateToken, async (req, res) => {
       await user.save();
     }
 
-    // Auto-promote to venue_owner if their email is in any venue's staff list
+    // Auto-promote to venue_staff if email is in any venue's staff list
     if (user.role === 'user' && user.email) {
       const staffVenue = await Venue.findOne({ staff: user.email.toLowerCase() });
       if (staffVenue) {
-        user.role = 'venue_owner';
+        user.role = 'venue_staff';
         await user.save();
       }
     }

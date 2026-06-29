@@ -51,6 +51,52 @@ body {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* ── html5-qrcode dark theme overrides ─────────────────────────────────── */
+#qr-reader {
+  background: #000 !important;
+  border: none !important;
+}
+#qr-reader__header_message,
+#qr-reader__status_span {
+  background: #141414 !important;
+  color: rgba(255,255,255,0.5) !important;
+  font-size: 11px !important;
+}
+#qr-reader__camera_selection {
+  background: #1c1c1c !important;
+  color: rgba(255,255,255,0.75) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 8px !important;
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+}
+#qr-reader__dashboard_section_csr button,
+#qr-reader__dashboard_section_fsr button {
+  background: #f59e0b !important;
+  color: #0d0d0d !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  padding: 8px 18px !important;
+  cursor: pointer !important;
+}
+#qr-reader__scan_region {
+  background: #000 !important;
+  border: none !important;
+}
+#qr-reader__scan_region img {
+  display: none !important;
+}
+#qr-reader__dashboard {
+  background: #141414 !important;
+  padding: 12px !important;
+}
+#qr-reader__filescan_input {
+  color: rgba(255,255,255,0.6) !important;
+  font-size: 12px !important;
+}
+
 /* Scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;

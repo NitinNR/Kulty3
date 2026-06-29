@@ -8,11 +8,11 @@ const userSchema = new mongoose.Schema({
   profilePhoto: String,
   role: {
     type: String,
-    enum: ['user', 'venue_owner', 'admin'],
+    enum: ['user', 'venue_owner', 'venue_staff', 'admin'],
     default: 'user'
   },
   membershipId: { type: String, unique: true, sparse: true },
-  qrCodeData: String,
+  qrCodeData: { type: String, unique: true, sparse: true },
   intentRole: { type: String, enum: ['member', 'venue_owner'], default: null },
   subscription: {
     status: {
