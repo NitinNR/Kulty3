@@ -137,8 +137,17 @@ router.patch('/applications/:id/reject', authenticateToken, requireRole(['admin'
 // Venues — all venues (including inactive) with owner info
 router.get('/venues', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
-    const venues = await Venue.find().populate('ownerId', 'name email');
-    res.json({ venues });
+    const { page = 1, limit = 20, search } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const filter = search
+      ? { $or: [{ name: new RegExp(search, 'i') }, { city: new RegExp(search, 'i') }] }
+      : {};
+
+    const [venues, total] = await Promise.all([
+      Venue.find(filter).populate('ownerId', 'name email').skip(skip).limit(parseInt(limit)),
+      Venue.countDocuments(filter),
+    ]);
+    res.json({ venues, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch venues' });
   }
@@ -147,8 +156,19 @@ router.get('/venues', authenticateToken, requireRole(['admin']), async (req, res
 // Events — all events with venue info
 router.get('/events', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
-    const events = await Event.find().populate('venueId', 'name city');
-    res.json({ events });
+    const { page = 1, limit = 20, status } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const filter = status ? { status } : {};
+
+    const [events, total] = await Promise.all([
+      Event.find(filter)
+        .populate('venueId', 'name city')
+        .sort({ date: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Event.countDocuments(filter),
+    ]);
+    res.json({ events, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch events' });
   }

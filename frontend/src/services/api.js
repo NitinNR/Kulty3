@@ -40,8 +40,8 @@ export const registerEvent   = (id)     => api.post(`/events/${id}/register`);
 export const unregisterEvent = (id)     => api.delete(`/events/${id}/register`);
 
 export const scanQREntry = (data) => api.post('/entries/scan', data);
-export const getMyEntries = () => api.get('/entries/my');
-export const getVenueEntries = (venueId) => api.get(`/entries/venue/${venueId}`);
+export const getMyEntries = (params) => api.get('/entries/my', { params });
+export const getVenueEntries = (venueId, params) => api.get(`/entries/venue/${venueId}`, { params });
 export const uploadBill = (entryId, data) => api.post(`/entries/${entryId}/bills`, data);
 export const approveBill = (entryId, billId, data) => api.patch(`/entries/${entryId}/bills/${billId}`, data);
 
@@ -53,8 +53,8 @@ export const bootstrapAdmin = (secret) => api.post('/auth/bootstrap-admin', { se
 export const getAdminStats = () => api.get('/admin/stats');
 export const getAllUsers = (params) => api.get('/admin/users', { params });
 export const updateUserRole = (userId, role) => api.patch(`/admin/users/${userId}/role`, { role });
-export const getAdminVenues = () => api.get('/admin/venues');
-export const getAdminEvents = () => api.get('/admin/events');
+export const getAdminVenues = (params) => api.get('/admin/venues', { params });
+export const getAdminEvents = (params) => api.get('/admin/events', { params });
 export const getAllBills = (params) => api.get('/admin/bills', { params });
 export const getAllEntries = (params) => api.get('/admin/entries', { params });
 

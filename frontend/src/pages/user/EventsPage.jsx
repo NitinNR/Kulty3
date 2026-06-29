@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarDays, Clock, MapPin, Ticket, ChevronRight } from 'lucide-react';
 import { getEvents } from '../../services/api';
@@ -128,19 +128,48 @@ const EventCard = ({ event, onClick }) => {
   );
 };
 
+const EVENT_LIMIT = 12;
+
 export const EventsPage = () => {
   const navigate = useNavigate();
-  const [events,  setEvents]  = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter,  setFilter]  = useState('');
+  const [events,      setEvents]      = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore,     setHasMore]     = useState(false);
+  const [evtPage,     setEvtPage]     = useState(1);
+  const [filter,      setFilter]      = useState('');
+  const sentinelRef = useRef(null);
+
+  const fetchEvents = useCallback(async (pg, append = false) => {
+    if (pg === 1) setLoading(true); else setLoadingMore(true);
+    try {
+      const params = { page: pg, limit: EVENT_LIMIT };
+      if (filter) params.status = filter;
+      const res = await getEvents(params);
+      const fetched = res.data?.events || [];
+      const total   = res.data?.total  || 0;
+      setEvents((prev) => append ? [...prev, ...fetched] : fetched);
+      setHasMore(pg * EVENT_LIMIT < total);
+      setEvtPage(pg);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      if (pg === 1) setLoading(false); else setLoadingMore(false);
+    }
+  }, [filter]);
+
+  useEffect(() => { fetchEvents(1, false); }, [filter]);
 
   useEffect(() => {
-    setLoading(true);
-    getEvents({ status: filter || undefined, limit: 50 })
-      .then((res) => setEvents(res.data?.events || res.data || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [filter]);
+    if (!hasMore || loading || loadingMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) fetchEvents(evtPage + 1, true); },
+      { rootMargin: '300px' }
+    );
+    const el = sentinelRef.current;
+    if (el) observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore, evtPage, fetchEvents]);
 
   return (
     <div className="min-h-screen pb-20 md:pb-0" style={{ backgroundColor: T.bg }}>
@@ -215,7 +244,7 @@ export const EventsPage = () => {
                 {filter ? `— ${FILTERS.find((f) => f.value === filter)?.label}` : ''}
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-6">
               {events.map((event) => (
                 <EventCard
                   key={event._id}
@@ -224,6 +253,16 @@ export const EventsPage = () => {
                 />
               ))}
             </div>
+            <div ref={sentinelRef} className="h-1" />
+            {loadingMore && (
+              <div className="flex justify-center py-6">
+                <div className="w-6 h-6 rounded-full border-2 animate-spin"
+                  style={{ borderColor: `${T.gold} transparent transparent transparent` }} />
+              </div>
+            )}
+            {!hasMore && events.length > 0 && (
+              <p className="text-center text-xs pb-10" style={{ color: T.dim }}>All events loaded</p>
+            )}
           </>
         )}
       </div>

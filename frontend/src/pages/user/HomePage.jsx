@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search, MapPin, Star, Heart, ChevronRight,
   LayoutGrid, Utensils, Music, Leaf, Coffee, Wine, GlassWater,
@@ -186,35 +186,64 @@ const Footer = () => (
   </footer>
 );
 
+const VENUE_LIMIT = 12;
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export const HomePage = () => {
-  const [venues,   setVenues]   = useState([]);
-  const [events,   setEvents]   = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [search,   setSearch]   = useState('');
-  const [category, setCategory] = useState('all');
+  const [venues,      setVenues]      = useState([]);
+  const [events,      setEvents]      = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore,     setHasMore]     = useState(false);
+  const [venuePage,   setVenuePage]   = useState(1);
+  const [search,      setSearch]      = useState('');
+  const [category,    setCategory]    = useState('all');
+  const sentinelRef = useRef(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    let active = true;
-    const t = setTimeout(async () => {
-      try {
-        setLoading(true);
-        const [vr, er] = await Promise.all([
-          getVenues({ search, category: category === 'all' ? '' : category }),
-          getEvents({ limit: 4 }),
-        ]);
-        if (!active) return;
-        setVenues(vr.data?.venues || vr.data || []);
-        setEvents(er.data?.events || er.data || []);
-      } catch (err) {
-        console.error('Home load failed:', err);
-      } finally {
-        if (active) setLoading(false);
-      }
-    }, 400);
-    return () => { active = false; clearTimeout(t); };
+  const fetchVenues = useCallback(async (pg, append = false) => {
+    if (pg === 1) setLoading(true); else setLoadingMore(true);
+    try {
+      const params = { page: pg, limit: VENUE_LIMIT };
+      if (search)   params.search   = search;
+      if (category !== 'all') params.category = category;
+      const vr = await getVenues(params);
+      const fetched = vr.data?.venues || [];
+      const total   = vr.data?.total  || 0;
+      setVenues((prev) => append ? [...prev, ...fetched] : fetched);
+      setHasMore(pg * VENUE_LIMIT < total);
+      setVenuePage(pg);
+    } catch (err) {
+      console.error('Home load failed:', err);
+    } finally {
+      if (pg === 1) setLoading(false); else setLoadingMore(false);
+    }
   }, [search, category]);
+
+  // Reset + reload when search/category changes
+  useEffect(() => {
+    const t = setTimeout(() => fetchVenues(1, false), search ? 400 : 0);
+    return () => clearTimeout(t);
+  }, [search, category]);
+
+  // Load events once
+  useEffect(() => {
+    getEvents({ limit: 4 })
+      .then((er) => setEvents(er.data?.events || []))
+      .catch(console.error);
+  }, []);
+
+  // IntersectionObserver: load next page when sentinel enters viewport
+  useEffect(() => {
+    if (!hasMore || loading || loadingMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) fetchVenues(venuePage + 1, true); },
+      { rootMargin: '300px' }
+    );
+    const el = sentinelRef.current;
+    if (el) observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore, venuePage, fetchVenues]);
 
   const activeCat = CATS.find((c) => c.value === category);
 
@@ -307,10 +336,9 @@ export const HomePage = () => {
             )}
           </div>
           {!loading && venues.length > 0 && (
-            <button className="text-sm font-semibold flex items-center gap-1 transition hover:opacity-70 flex-shrink-0 ml-4"
-              style={{ color: T.gold }}>
-              View all <ChevronRight className="w-4 h-4" />
-            </button>
+            <span className="text-sm flex-shrink-0 ml-4" style={{ color: T.dim }}>
+              {venues.length} shown
+            </span>
           )}
         </div>
 
@@ -330,11 +358,25 @@ export const HomePage = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-2 mb-12">
-            {venues.map((venue) => (
-              <VenueCard key={venue._id} venue={venue} onClick={() => navigate(`/venues/${venue._id}`)} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-2 mb-6">
+              {venues.map((venue) => (
+                <VenueCard key={venue._id} venue={venue} onClick={() => navigate(`/venues/${venue._id}`)} />
+              ))}
+            </div>
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="h-1" />
+            {loadingMore && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-6">
+                {[1, 2, 3].map((i) => <VenueCardSkeleton key={i} />)}
+              </div>
+            )}
+            {!hasMore && venues.length > 0 && (
+              <p className="text-center text-xs pb-8 pt-2" style={{ color: T.dim }}>
+                All {venues.length} venues loaded
+              </p>
+            )}
+          </>
         )}
 
         {/* ── Upcoming events ──────────────────────────────── */}

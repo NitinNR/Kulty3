@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useContext } from 'react';
+import { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import {
   Upload, Camera, CheckCircle2, XCircle, Clock,
   Receipt, Banknote, ChevronDown, ChevronUp, MapPin, X,
@@ -55,25 +55,53 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+const ENTRY_LIMIT = 15;
+
 export const EntryHistoryPage = () => {
-  const [entries, setEntries]       = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [expanded, setExpanded]     = useState({});
-  const [modal, setModal]           = useState(null);   // entry | null
-  const [billFile, setBillFile]     = useState(null);
+  const [entries,     setEntries]     = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore,     setHasMore]     = useState(false);
+  const [entryPage,   setEntryPage]   = useState(1);
+  const [expanded,    setExpanded]    = useState({});
+  const [modal,       setModal]       = useState(null);
+  const [billFile,    setBillFile]    = useState(null);
   const [billPreview, setBillPreview] = useState(null);
-  const [billAmount, setBillAmount] = useState('');
-  const [uploading, setUploading]   = useState(false);
-  const fileRef   = useRef(null);
-  const cameraRef = useRef(null);
-  const toast     = useContext(ToastContext);
+  const [billAmount,  setBillAmount]  = useState('');
+  const [uploading,   setUploading]   = useState(false);
+  const fileRef     = useRef(null);
+  const cameraRef   = useRef(null);
+  const sentinelRef = useRef(null);
+  const toast       = useContext(ToastContext);
+
+  const fetchEntries = useCallback(async (pg, append = false) => {
+    if (pg === 1) setLoading(true); else setLoadingMore(true);
+    try {
+      const r = await getMyEntries({ page: pg, limit: ENTRY_LIMIT });
+      const fetched = r.data?.entries || [];
+      const total   = r.data?.total   || 0;
+      setEntries((prev) => append ? [...prev, ...fetched] : fetched);
+      setHasMore(pg * ENTRY_LIMIT < total);
+      setEntryPage(pg);
+    } catch {
+      toast?.showError?.('Failed to load visit history');
+    } finally {
+      if (pg === 1) setLoading(false); else setLoadingMore(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchEntries(1, false); }, []);
 
   useEffect(() => {
-    getMyEntries()
-      .then((r) => setEntries(r.data))
-      .catch(() => toast?.showError?.('Failed to load visit history'))
-      .finally(() => setLoading(false));
-  }, []);
+    if (!hasMore || loading || loadingMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) fetchEntries(entryPage + 1, true); },
+      { rootMargin: '200px' }
+    );
+    const el = sentinelRef.current;
+    if (el) observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore, entryPage, fetchEntries]);
 
   const toggle = (id) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
 
@@ -150,7 +178,7 @@ export const EntryHistoryPage = () => {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(245,158,11,0.55)' }}>
-                Total Cashback Earned
+                Cashback Earned
               </p>
               <p className="text-2xl font-bold" style={{ color: T.gold }}>₹{totalCashback}</p>
             </div>
@@ -176,6 +204,7 @@ export const EntryHistoryPage = () => {
             </p>
           </div>
         ) : (
+          <>
           <div className="space-y-3">
             {entries.map((entry) => {
               const bills     = entry.bills || [];
@@ -316,6 +345,19 @@ export const EntryHistoryPage = () => {
               );
             })}
           </div>
+          <div ref={sentinelRef} className="h-1" />
+          {loadingMore && (
+            <div className="flex justify-center py-4">
+              <div className="w-5 h-5 rounded-full border-2 animate-spin"
+                style={{ borderColor: `${T.gold} transparent transparent transparent` }} />
+            </div>
+          )}
+          {!hasMore && entries.length > 0 && (
+            <p className="text-center text-xs pt-2 pb-4" style={{ color: T.dim }}>
+              All {entries.length} visits loaded
+            </p>
+          )}
+          </>
         )}
       </div>
 

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { getMyVenue, getVenueEntries, approveBill } from '../../services/api';
 import { Spinner } from '../../components/common/Spinner';
+import { Pagination } from '../../components/common/Pagination';
 import { format } from 'date-fns';
 
 const T = {
@@ -37,11 +38,13 @@ const StatusBadge = ({ status }) => {
 };
 
 const FILTERS = ['pending', 'approved', 'rejected', 'all'];
+const BILLS_PER_PAGE = 15;
 
 export const VenueBillsPage = () => {
   const [bills, setBills]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [filter, setFilter]       = useState('pending');
+  const [billPage, setBillPage]   = useState(1);
   const [updating, setUpdating]   = useState(null);
   const [previewImg, setPreviewImg] = useState(null);
   const [rejectModal, setRejectModal] = useState(null); // { entryId, billId }
@@ -99,6 +102,7 @@ export const VenueBillsPage = () => {
   };
 
   const filtered = filter === 'all' ? bills : bills.filter((b) => b.bill.status === filter);
+  const paginatedBills = filtered.slice((billPage - 1) * BILLS_PER_PAGE, billPage * BILLS_PER_PAGE);
 
   const counts = FILTERS.reduce((acc, f) => {
     acc[f] = f === 'all' ? bills.length : bills.filter((b) => b.bill.status === f).length;
@@ -133,7 +137,7 @@ export const VenueBillsPage = () => {
             return (
               <button
                 key={f}
-                onClick={() => setFilter(f)}
+                onClick={() => { setFilter(f); setBillPage(1); }}
                 className="flex-shrink-0 text-sm font-semibold px-4 py-2 rounded-full transition"
                 style={active
                   ? { backgroundColor: T.gold, color: '#0d0d0d' }
@@ -160,8 +164,9 @@ export const VenueBillsPage = () => {
             </p>
           </div>
         ) : (
+          <>
           <div className="space-y-3">
-            {filtered.map(({ bill, entryId, member }) => {
+            {paginatedBills.map(({ bill, entryId, member }) => {
               const key        = `${entryId}-${bill._id}`;
               const isUpdating = updating === key;
 
@@ -260,6 +265,16 @@ export const VenueBillsPage = () => {
               );
             })}
           </div>
+          {filtered.length > BILLS_PER_PAGE && (
+            <Pagination
+              page={billPage}
+              total={filtered.length}
+              limit={BILLS_PER_PAGE}
+              dark
+              onChange={(p) => { setBillPage(p); window.scrollTo(0, 0); }}
+            />
+          )}
+          </>
         )}
       </div>
 

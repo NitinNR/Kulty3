@@ -68,11 +68,19 @@ router.post('/scan', authenticateToken, async (req, res) => {
 router.get('/my', authenticateToken, async (req, res) => {
   try {
     const user = await User.findOne({ firebaseUid: req.user.uid });
-    const entries = await Entry.find({ userId: user._id })
-      .populate('venueId')
-      .sort({ scannedAt: -1 });
+    const { page = 1, limit = 15 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    res.json(entries);
+    const [entries, total] = await Promise.all([
+      Entry.find({ userId: user._id })
+        .populate('venueId')
+        .sort({ scannedAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Entry.countDocuments({ userId: user._id }),
+    ]);
+
+    res.json({ entries, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
     console.error('Error fetching user entries:', error);
     res.status(500).json({ error: 'Failed to fetch entries' });
@@ -81,11 +89,19 @@ router.get('/my', authenticateToken, async (req, res) => {
 
 router.get('/venue/:venueId', authenticateToken, requireRole(['venue_owner', 'venue_staff']), async (req, res) => {
   try {
-    const entries = await Entry.find({ venueId: req.params.venueId })
-      .populate('userId', 'name profilePhoto membershipId')
-      .sort({ scannedAt: -1 });
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    res.json(entries);
+    const [entries, total] = await Promise.all([
+      Entry.find({ venueId: req.params.venueId })
+        .populate('userId', 'name profilePhoto membershipId')
+        .sort({ scannedAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Entry.countDocuments({ venueId: req.params.venueId }),
+    ]);
+
+    res.json({ entries, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
     console.error('Error fetching venue entries:', error);
     res.status(500).json({ error: 'Failed to fetch entries' });
