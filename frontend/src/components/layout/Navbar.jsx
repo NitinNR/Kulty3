@@ -58,15 +58,17 @@ export const Navbar = () => {
           </button>
 
           {/* ── Logo ───────────────────────────────────── */}
-          {/* Centered on mobile, left on desktop */}
           <Link
             to="/home"
-            className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2 md:static md:translate-x-0"
+            className="flex items-center gap-1.5 absolute left-1/2 -translate-x-1/2 md:static md:translate-x-0"
           >
-            <div className="w-7 h-7 bg-accent-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-gray-900 font-bold text-sm leading-none">K</span>
-            </div>
-            <span className="text-accent-500 font-display font-bold text-xl leading-none">Kulty</span>
+            <span style={{ fontSize: '7px', color: 'rgba(245,158,11,0.45)', lineHeight: 1 }}>◆</span>
+            <span
+              className="font-display font-bold"
+              style={{ fontSize: '18px', color: 'rgba(255,255,255,0.9)', letterSpacing: '0.08em' }}
+            >
+              Kulty
+            </span>
           </Link>
 
           {/* ── Desktop nav links ───────────────────────── */}

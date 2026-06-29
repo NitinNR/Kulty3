@@ -1,5 +1,51 @@
+import { useState } from 'react';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 import { format } from 'date-fns';
+import { X, Maximize2 } from 'lucide-react';
+
+const BrandMark = ({ small = false }) => (
+  <div className="flex items-center gap-1.5">
+    <span style={{ fontSize: small ? '7px' : '8px', color: 'rgba(245,158,11,0.5)', lineHeight: 1 }}>◆</span>
+    <span
+      className="font-display font-bold"
+      style={{ fontSize: small ? '12px' : '14px', color: 'rgba(245,158,11,0.7)', letterSpacing: '0.14em' }}
+    >
+      KULTY
+    </span>
+  </div>
+);
+
+const QRModal = ({ value, onClose }) => (
+  <div
+    className="fixed inset-0 z-[200] flex items-center justify-center px-6"
+    style={{ backgroundColor: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(10px)' }}
+    onClick={onClose}
+  >
+    <div
+      className="relative flex flex-col items-center gap-5 p-8 rounded-3xl w-full"
+      style={{ backgroundColor: '#141414', border: '1px solid rgba(245,158,11,0.18)', maxWidth: '300px' }}
+      onClick={e => e.stopPropagation()}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 flex items-center justify-center w-8 h-8 rounded-full"
+        style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}
+      >
+        <X className="w-4 h-4" />
+      </button>
+      <BrandMark />
+      <div className="rounded-2xl p-4" style={{ backgroundColor: '#ffffff' }}>
+        <QRCode value={value} size={210} level="H" includeMargin={false} fgColor="#0d0d0d" bgColor="#ffffff" />
+      </div>
+      <div className="text-center">
+        <p className="font-bold tracking-[0.2em] mb-1" style={{ color: 'rgba(245,158,11,0.8)', fontSize: '11px' }}>
+          SCAN TO ENTER
+        </p>
+        <p style={{ color: 'rgba(255,255,255,0.28)', fontSize: '11px' }}>Show this at venue entry</p>
+      </div>
+    </div>
+  </div>
+);
 
 const Chip = () => (
   <div
@@ -36,6 +82,7 @@ const NFCIcon = () => (
 );
 
 export const MembershipCard = ({ user }) => {
+  const [qrOpen, setQrOpen] = useState(false);
   const startDate = user?.subscription?.startDate ? new Date(user.subscription.startDate) : null;
   const endDate   = user?.subscription?.endDate   ? new Date(user.subscription.endDate)   : null;
   const qrValue   = user?.qrCodeData || user?.membershipId || 'KULTY';
@@ -53,7 +100,9 @@ export const MembershipCard = ({ user }) => {
   };
 
   return (
-    <div className="w-full max-w-xl mx-auto select-none shine-effect" style={cardBg}>
+    <>
+      {qrOpen && <QRModal value={qrValue} onClose={() => setQrOpen(false)} />}
+      <div className="w-full max-w-xl mx-auto select-none shine-effect" style={cardBg}>
 
       {/* ── Desktop / tablet layout: horizontal ─────────────── */}
       <div className="hidden sm:flex" style={{ minHeight: '220px' }}>
@@ -74,13 +123,7 @@ export const MembershipCard = ({ user }) => {
 
           <div className="relative">
             <div className="flex items-start justify-between mb-5">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ backgroundColor: '#f59e0b' }}>
-                  <span className="text-xs font-bold" style={{ color: '#0d0d0d' }}>K</span>
-                </div>
-                <span className="font-display font-bold text-lg leading-none" style={{ color: '#f59e0b' }}>Kulty</span>
-              </div>
+              <BrandMark />
               <span className="text-xs font-bold tracking-[0.2em] leading-none px-2.5 py-1.5 rounded-full"
                 style={{ border: '1px solid rgba(245,158,11,0.3)', color: 'rgba(245,158,11,0.8)', backgroundColor: 'rgba(245,158,11,0.05)' }}>
                 ANNUAL MEMBER
@@ -139,19 +182,26 @@ export const MembershipCard = ({ user }) => {
           </div>
         </div>
 
-        {/* Right QR panel */}
-        <div className="flex flex-col items-center justify-center gap-3 px-5 py-6 flex-shrink-0"
-          style={{ width: '152px', borderLeft: '1px solid rgba(245,158,11,0.1)', background: 'rgba(0,0,0,0.25)' }}>
+        {/* Right QR panel — clickable */}
+        <button
+          onClick={() => setQrOpen(true)}
+          className="flex flex-col items-center justify-center gap-3 px-5 py-6 flex-shrink-0 group transition-opacity hover:opacity-90"
+          style={{ width: '152px', borderLeft: '1px solid rgba(245,158,11,0.1)', background: 'rgba(0,0,0,0.25)' }}
+        >
           <p className="text-xs font-bold tracking-[0.18em] text-center" style={{ color: 'rgba(245,158,11,0.65)' }}>
             SCAN TO<br />ENTER
           </p>
-          <div className="rounded-xl p-2.5" style={{ backgroundColor: '#fff' }}>
+          <div className="rounded-xl p-2.5 relative" style={{ backgroundColor: '#fff' }}>
             <QRCode value={qrValue} size={100} level="H" includeMargin={false} fgColor="#0d0d0d" bgColor="#ffffff" />
+            <div className="absolute inset-0 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+              style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+              <Maximize2 className="w-5 h-5 text-white" />
+            </div>
           </div>
-          <p className="text-xs text-center leading-snug" style={{ color: 'rgba(255,255,255,0.22)', fontSize: '10px' }}>
-            Show at<br />venue entry
+          <p className="flex items-center gap-1 text-center leading-snug" style={{ color: 'rgba(255,255,255,0.22)', fontSize: '10px' }}>
+            <Maximize2 className="w-2.5 h-2.5" /> Tap to enlarge
           </p>
-        </div>
+        </button>
       </div>
 
       {/* ── Mobile layout: vertical stack ─────────────────────── */}
@@ -171,15 +221,9 @@ export const MembershipCard = ({ user }) => {
             ))}
           </div>
 
-          {/* Top row: logo + tier */}
+          {/* Top row: brand + tier */}
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: '#f59e0b' }}>
-                <span className="text-xs font-bold" style={{ color: '#0d0d0d', fontSize: '10px' }}>K</span>
-              </div>
-              <span className="font-display font-bold text-base leading-none" style={{ color: '#f59e0b' }}>Kulty</span>
-            </div>
+            <BrandMark small />
             <span className="text-xs font-bold tracking-widest px-2 py-1 rounded-full"
               style={{ border: '1px solid rgba(245,158,11,0.3)', color: 'rgba(245,158,11,0.75)', backgroundColor: 'rgba(245,158,11,0.05)', fontSize: '9px' }}>
               ANNUAL MEMBER
@@ -240,22 +284,30 @@ export const MembershipCard = ({ user }) => {
           </div>
         </div>
 
-        {/* Mobile QR strip */}
-        <div className="flex items-center justify-between gap-4 px-5 py-4"
-          style={{ borderTop: '1px solid rgba(245,158,11,0.1)', background: 'rgba(0,0,0,0.3)' }}>
-          <div>
+        {/* Mobile QR strip — clickable */}
+        <button
+          onClick={() => setQrOpen(true)}
+          className="flex items-center justify-between gap-4 px-5 py-4 w-full group"
+          style={{ borderTop: '1px solid rgba(245,158,11,0.1)', background: 'rgba(0,0,0,0.3)' }}
+        >
+          <div className="text-left">
             <p className="font-bold tracking-[0.18em] mb-1" style={{ color: 'rgba(245,158,11,0.7)', fontSize: '10px' }}>
               SCAN TO ENTER
             </p>
-            <p className="leading-snug" style={{ color: 'rgba(255,255,255,0.25)', fontSize: '9px' }}>
-              Show at venue entry
+            <p className="flex items-center gap-1" style={{ color: 'rgba(255,255,255,0.25)', fontSize: '9px' }}>
+              <Maximize2 className="w-2.5 h-2.5" /> Tap to enlarge
             </p>
           </div>
-          <div className="rounded-xl p-2" style={{ backgroundColor: '#fff' }}>
+          <div className="rounded-xl p-2 relative flex-shrink-0" style={{ backgroundColor: '#fff' }}>
             <QRCode value={qrValue} size={80} level="H" includeMargin={false} fgColor="#0d0d0d" bgColor="#ffffff" />
+            <div className="absolute inset-0 rounded-xl flex items-center justify-center opacity-0 group-active:opacity-100 transition"
+              style={{ backgroundColor: 'rgba(0,0,0,0.35)' }}>
+              <Maximize2 className="w-4 h-4 text-white" />
+            </div>
           </div>
-        </div>
+        </button>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
