@@ -1,9 +1,19 @@
 {
   "name": "kulty3",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "build": "cd frontend && npm run build",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run dev"
+  },
+  "dependencies": {
+    "axios": "^1.18.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "firebase-admin": "^14.1.0",
+    "mongoose": "^9.7.3",
+    "razorpay": "^2.9.6"
   }
 }
