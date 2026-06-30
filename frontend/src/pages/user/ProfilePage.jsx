@@ -4,7 +4,7 @@ import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
 import { MembershipCard } from '../../components/card/MembershipCard';
 import { format } from 'date-fns';
-import { CreditCard, LogOut, CalendarDays, Clock, ChevronRight, Receipt } from 'lucide-react';
+import { CreditCard, LogOut, CalendarDays, Clock, ChevronRight, Receipt, Sparkles, ArrowRight } from 'lucide-react';
 
 const T = {
   bg:       '#0d0d0d',
@@ -66,6 +66,41 @@ export const ProfilePage = () => {
             {isActive ? 'ACTIVE' : 'INACTIVE'}
           </span>
         </div>
+
+        {/* ── Activate membership banner (inactive users) ── */}
+        {!isActive && (
+          <button
+            onClick={() => navigate('/payment')}
+            className="w-full text-left rounded-2xl p-5 mb-5 relative overflow-hidden transition-opacity hover:opacity-90"
+            style={{
+              background: 'linear-gradient(135deg, #1a1200 0%, #141414 100%)',
+              border: '1px solid rgba(245,158,11,0.35)',
+              boxShadow: '0 0 30px rgba(245,158,11,0.06)',
+            }}
+          >
+            <div
+              className="absolute top-0 left-0 right-0 h-px"
+              style={{ background: 'linear-gradient(90deg, transparent, #f59e0b55, transparent)' }}
+            />
+            <div className="flex items-center gap-3 mb-3">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(245,158,11,0.15)' }}
+              >
+                <Sparkles className="w-5 h-5" style={{ color: T.gold }} />
+              </div>
+              <div>
+                <p className="font-bold text-sm" style={{ color: T.gold }}>Activate Membership</p>
+                <p className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>◆ KULTY Premium Plus</p>
+              </div>
+              <ArrowRight className="w-4 h-4 ml-auto flex-shrink-0" style={{ color: T.gold }} />
+            </div>
+            <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
+              Get your digital membership card, cashback rewards, and exclusive access to all partner venues —{' '}
+              <span style={{ color: T.gold }}>₹999/year</span>.
+            </p>
+          </button>
+        )}
 
         {/* ── Membership card ── */}
         {isActive && (

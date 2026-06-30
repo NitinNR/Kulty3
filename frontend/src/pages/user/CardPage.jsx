@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Download, Home, Ticket, Coins, PartyPopper, ShieldCheck } from 'lucide-react';
+import { Download, Home, Ticket, Coins, PartyPopper, ShieldCheck, Sparkles, ArrowRight } from 'lucide-react';
 import { MembershipCard } from '../../components/card/MembershipCard';
 import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
@@ -40,6 +40,8 @@ export const CardPage = () => {
     URL.revokeObjectURL(url);
   };
 
+  const isActive = profile?.subscription?.status === 'active';
+
   return (
     <div className="min-h-screen flex flex-col pb-20 md:pb-0" style={{ backgroundColor: T.bg }}>
       <Navbar />
@@ -52,37 +54,75 @@ export const CardPage = () => {
             className="font-display font-bold text-white mb-2"
             style={{ fontSize: 'clamp(1.6rem, 4vw, 2.2rem)' }}
           >
-            Your Membership Card
+            {isActive ? 'Your Membership Card' : 'Membership Card'}
           </h1>
           <p className="text-sm" style={{ color: T.sub }}>
-            Show this at any partner venue for priority entry and cashback
+            {isActive
+              ? 'Show this at any partner venue for priority entry and cashback'
+              : 'Activate your membership to get a premium digital card'}
           </p>
         </div>
 
-        {/* Card with subtle glow */}
-        <div id="card-to-download" className="mb-8 px-1" style={{ filter: 'drop-shadow(0 0 40px rgba(245,158,11,0.12))' }}>
-          <MembershipCard user={profile} />
-        </div>
+        {/* Inactive — upgrade prompt */}
+        {!isActive && (
+          <div
+            className="max-w-sm mx-auto rounded-2xl p-6 mb-10 text-center relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, #1a1200 0%, #141414 100%)',
+              border: '1px solid rgba(245,158,11,0.3)',
+            }}
+          >
+            <div
+              className="absolute top-0 left-0 right-0 h-px"
+              style={{ background: 'linear-gradient(90deg, transparent, #f59e0b55, transparent)' }}
+            />
+            <Sparkles className="w-10 h-10 mx-auto mb-4" style={{ color: T.gold }} />
+            <h2 className="font-bold text-lg text-white mb-2">Get Your Kulty Card</h2>
+            <p className="text-sm mb-5" style={{ color: T.sub }}>
+              Unlock your digital membership card, cashback on bills, and exclusive venue access.
+            </p>
+            <div className="font-bold text-3xl text-white mb-1">₹999<span className="text-base font-normal" style={{ color: T.sub }}>/year</span></div>
+            <p className="text-xs mb-6" style={{ color: 'rgba(255,255,255,0.3)' }}>Billed annually</p>
+            <button
+              onClick={() => navigate('/payment')}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm transition-opacity hover:opacity-90"
+              style={{ background: T.gold, color: '#0d0d0d' }}
+            >
+              Activate Membership
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
-        {/* Action buttons */}
-        <div className="flex gap-3 mb-12 max-w-sm mx-auto">
-          <button
-            onClick={handleDownloadCard}
-            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80 active:opacity-70"
-            style={{ backgroundColor: T.gold, color: '#0d0d0d' }}
-          >
-            <Download className="w-4 h-4" />
-            Download
-          </button>
-          <button
-            onClick={() => navigate('/home')}
-            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80 active:opacity-70"
-            style={{ backgroundColor: T.cardLite, color: 'rgba(255,255,255,0.8)', border: `1px solid ${T.border}` }}
-          >
-            <Home className="w-4 h-4" />
-            Explore
-          </button>
-        </div>
+        {/* Active — card + actions */}
+        {isActive && (
+          <>
+            {/* Card with subtle glow */}
+            <div id="card-to-download" className="mb-8 px-1" style={{ filter: 'drop-shadow(0 0 40px rgba(245,158,11,0.12))' }}>
+              <MembershipCard user={profile} />
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3 mb-12 max-w-sm mx-auto">
+              <button
+                onClick={handleDownloadCard}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80 active:opacity-70"
+                style={{ backgroundColor: T.gold, color: '#0d0d0d' }}
+              >
+                <Download className="w-4 h-4" />
+                Download
+              </button>
+              <button
+                onClick={() => navigate('/home')}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80 active:opacity-70"
+                style={{ backgroundColor: T.cardLite, color: 'rgba(255,255,255,0.8)', border: `1px solid ${T.border}` }}
+              >
+                <Home className="w-4 h-4" />
+                Explore
+              </button>
+            </div>
+          </>
+        )}
 
         {/* Perks divider */}
         <div className="flex items-center gap-4 mb-8">

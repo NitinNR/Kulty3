@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
-import { SubscriptionRoute } from './routes/SubscriptionRoute';
 import { RoleRoute } from './routes/RoleRoute';
 import { useAuth } from './hooks/useAuth';
 
@@ -52,10 +51,9 @@ const RootRedirect = () => {
   if (profile.role === 'admin') return <Navigate to="/admin" replace />;
   if (profile.role === 'venue_owner' || profile.role === 'venue_staff') return <Navigate to="/venue" replace />;
   if (!profile.name) return <Navigate to="/complete-profile" replace />;
-  if (profile.subscription?.status === 'active') return <Navigate to="/home" replace />;
   if (!profile.intentRole) return <Navigate to="/choose-path" replace />;
   if (profile.intentRole === 'venue_owner') return <Navigate to="/apply-venue" replace />;
-  return <Navigate to="/payment" replace />;
+  return <Navigate to="/home" replace />;
 };
 
 export default function App() {
@@ -74,15 +72,15 @@ export default function App() {
             <Route path="/payment" element={<ProtectedRoute><PaymentPage /></ProtectedRoute>} />
             <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccessPage /></ProtectedRoute>} />
 
-            {/* User portal */}
-            <Route path="/home" element={<ProtectedRoute><SubscriptionRoute><HomePage /></SubscriptionRoute></ProtectedRoute>} />
-            <Route path="/venues/:id" element={<ProtectedRoute><SubscriptionRoute><VenueDetailPage /></SubscriptionRoute></ProtectedRoute>} />
-            <Route path="/events" element={<ProtectedRoute><SubscriptionRoute><EventsPage /></SubscriptionRoute></ProtectedRoute>} />
-            <Route path="/events/:id" element={<ProtectedRoute><SubscriptionRoute><EventDetailPage /></SubscriptionRoute></ProtectedRoute>} />
-            <Route path="/card" element={<ProtectedRoute><SubscriptionRoute><CardPage /></SubscriptionRoute></ProtectedRoute>} />
-            <Route path="/entries" element={<ProtectedRoute><SubscriptionRoute><EntryHistoryPage /></SubscriptionRoute></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            <Route path="/favorites" element={<ProtectedRoute><SubscriptionRoute><FavoritesPage /></SubscriptionRoute></ProtectedRoute>} />
+            {/* User portal — no subscription gate, users can explore freely */}
+            <Route path="/home"        element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
+            <Route path="/venues/:id"  element={<ProtectedRoute><VenueDetailPage /></ProtectedRoute>} />
+            <Route path="/events"      element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
+            <Route path="/events/:id"  element={<ProtectedRoute><EventDetailPage /></ProtectedRoute>} />
+            <Route path="/card"        element={<ProtectedRoute><CardPage /></ProtectedRoute>} />
+            <Route path="/entries"     element={<ProtectedRoute><EntryHistoryPage /></ProtectedRoute>} />
+            <Route path="/profile"     element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/favorites"   element={<ProtectedRoute><FavoritesPage /></ProtectedRoute>} />
 
             {/* Admin portal */}
             <Route path="/admin" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminDashboard /></RoleRoute></ProtectedRoute>} />
