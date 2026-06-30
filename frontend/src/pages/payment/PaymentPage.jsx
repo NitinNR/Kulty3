@@ -92,7 +92,7 @@ export const PaymentPage = () => {
           <div className="bg-gradient-to-br from-accent-50 to-amber-50 rounded-xl p-8 mb-8 border-2 border-accent-200">
             <div className="text-center">
               <p className="text-gray-600 text-sm mb-2">Annual Price</p>
-              <div className="text-5xl font-display font-bold text-gray-900 mb-2">
+              <div className="text-5xl font-display font-bold text-white mb-2">
                 ₹999
               </div>
               <p className="text-gray-600 text-sm">/year</p>
