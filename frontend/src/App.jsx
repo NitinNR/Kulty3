@@ -24,6 +24,7 @@ import { EntryHistoryPage } from './pages/user/EntryHistoryPage';
 import { EventsPage } from './pages/user/EventsPage';
 import { EventDetailPage } from './pages/user/EventDetailPage';
 import { ProfilePage } from './pages/user/ProfilePage';
+import { FavoritesPage } from './pages/user/FavoritesPage';
 
 // Admin portal
 import { AdminDashboard } from './pages/admin/AdminDashboard';
@@ -81,6 +82,7 @@ export default function App() {
             <Route path="/card" element={<ProtectedRoute><SubscriptionRoute><CardPage /></SubscriptionRoute></ProtectedRoute>} />
             <Route path="/entries" element={<ProtectedRoute><SubscriptionRoute><EntryHistoryPage /></SubscriptionRoute></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/favorites" element={<ProtectedRoute><SubscriptionRoute><FavoritesPage /></SubscriptionRoute></ProtectedRoute>} />
 
             {/* Admin portal */}
             <Route path="/admin" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminDashboard /></RoleRoute></ProtectedRoute>} />

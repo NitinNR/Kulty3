@@ -58,6 +58,10 @@ export const getAdminEvents = (params) => api.get('/admin/events', { params });
 export const getAllBills = (params) => api.get('/admin/bills', { params });
 export const getAllEntries = (params) => api.get('/admin/entries', { params });
 
+export const getFavoriteIds = ()       => api.get('/users/favorites/ids');
+export const getFavorites   = (params) => api.get('/users/favorites', { params });
+export const toggleFavorite = (venueId) => api.post(`/users/favorites/${venueId}`);
+
 export const getMyVenue = () => api.get('/venues/my/venue');
 export const addVenueStaff = (venueId, email) => api.post(`/venues/${venueId}/staff`, { email });
 export const removeVenueStaff = (venueId, email) => api.delete(`/venues/${venueId}/staff/${encodeURIComponent(email)}`);

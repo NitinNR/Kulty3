@@ -4,7 +4,7 @@ import {
   LayoutGrid, Utensils, Music, Leaf, Coffee, Wine, GlassWater,
   Compass, Camera, AtSign, Sparkles, CalendarDays, TrendingUp, Clock,
 } from 'lucide-react';
-import { getVenues, getEvents } from '../../services/api';
+import { getVenues, getEvents, getFavoriteIds, toggleFavorite } from '../../services/api';
 import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
 import { useNavigate } from 'react-router-dom';
@@ -46,15 +46,6 @@ const stableNum = (s = '', mod = 10, min = 0) => {
 };
 const stableRating = (s) => (4.1 + stableNum(s, 9) / 10).toFixed(1);
 
-// ── Favorites helpers (localStorage) ─────────────────────────────────────────
-const FAVES_KEY = 'kultyFavoriteVenues';
-const getFaves = () => {
-  try { return JSON.parse(localStorage.getItem(FAVES_KEY) || '[]'); } catch { return []; }
-};
-const setFaves = (ids) => {
-  try { localStorage.setItem(FAVES_KEY, JSON.stringify(ids)); } catch {}
-};
-
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 const Skel = ({ w, h, rounded = 'rounded-xl', className = '' }) => (
   <div className={`animate-pulse ${rounded} ${className}`}
@@ -78,9 +69,12 @@ const VenueCardSkeleton = () => (
 );
 
 // ── Venue card ────────────────────────────────────────────────────────────────
-const VenueCard = ({ venue, onClick }) => {
-  const [liked, setLiked] = useState(() => getFaves().includes(venue._id));
+const VenueCard = ({ venue, onClick, initialLiked = false, onLikeToggle }) => {
+  const [liked, setLiked] = useState(initialLiked);
   const [pop,   setPop]   = useState(false);
+
+  // sync when parent's favoriteIds set loads after venues
+  useEffect(() => { setLiked(initialLiked); }, [initialLiked]);
 
   const cat     = venue.category?.toLowerCase() || 'other';
   const meta    = CAT_META[cat] || CAT_META.other;
@@ -88,13 +82,17 @@ const VenueCard = ({ venue, onClick }) => {
   const rating  = stableRating(venue.name);
   const tags    = (venue.amenities || []).filter(Boolean).slice(0, 3);
 
-  const toggleLike = (e) => {
+  const handleToggle = async (e) => {
     e.stopPropagation();
-    const next  = !liked;
-    const faves = getFaves();
-    setFaves(next ? [...faves.filter((id) => id !== venue._id), venue._id] : faves.filter((id) => id !== venue._id));
+    const next = !liked;
     setLiked(next);
     if (next) { setPop(true); setTimeout(() => setPop(false), 600); }
+    try {
+      await toggleFavorite(venue._id);
+      onLikeToggle?.(venue._id, next);
+    } catch {
+      setLiked(!next); // revert on error
+    }
   };
 
   return (
@@ -114,12 +112,10 @@ const VenueCard = ({ venue, onClick }) => {
           </div>
         )}
 
-        {/* Cashback / member badge */}
         {venue.cashbackPercentage > 0 ? (
           <div className="absolute top-3 left-3 flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full"
             style={{ backgroundColor: T.gold, color: '#000' }}>
-            <TrendingUp className="w-3 h-3" />
-            {venue.cashbackPercentage}% BACK
+            <TrendingUp className="w-3 h-3" />{venue.cashbackPercentage}% BACK
           </div>
         ) : (
           <div className="absolute top-3 left-3 text-xs font-bold px-2.5 py-1 rounded-full"
@@ -128,16 +124,14 @@ const VenueCard = ({ venue, onClick }) => {
           </div>
         )}
 
-        {/* Heart / favorite */}
         <button
-          onClick={toggleLike}
+          onClick={handleToggle}
           className={`absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full transition-transform duration-150 ${pop ? 'scale-125' : 'scale-100'}`}
           style={{ backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
         >
-          <Heart className={`w-4 h-4 transition-all duration-200 ${liked ? 'fill-red-400 text-red-400 scale-110' : 'text-white'}`} />
+          <Heart className={`w-4 h-4 transition-all duration-200 ${liked ? 'fill-red-400 text-red-400' : 'text-white'}`} />
         </button>
 
-        {/* Category chip */}
         <div className="absolute bottom-3 left-3 flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
           style={{ backgroundColor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', color: '#ddd' }}>
           <CatIcon className="w-3 h-3" />
@@ -147,7 +141,6 @@ const VenueCard = ({ venue, onClick }) => {
 
       {/* ── Info ── */}
       <div className="p-4">
-        {/* Name + rating */}
         <div className="flex items-start justify-between gap-2 mb-1">
           <h3 className="text-white font-semibold text-sm leading-snug flex-1 line-clamp-1">{venue.name}</h3>
           <div className="flex items-center gap-1 flex-shrink-0">
@@ -156,18 +149,15 @@ const VenueCard = ({ venue, onClick }) => {
           </div>
         </div>
 
-        {/* City */}
         <div className="flex items-center gap-1 mb-0.5">
           <MapPin className="w-3 h-3 flex-shrink-0" style={{ color: T.dim }} />
           <span className="text-xs truncate" style={{ color: T.sub }}>{venue.city || 'India'}</span>
         </div>
 
-        {/* Address */}
         {venue.address && (
           <p className="text-xs truncate mb-2 pl-4" style={{ color: T.dim }}>{venue.address}</p>
         )}
 
-        {/* Amenity tags */}
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2 mb-2">
             {tags.map((tag) => (
@@ -179,7 +169,6 @@ const VenueCard = ({ venue, onClick }) => {
           </div>
         )}
 
-        {/* Footer: cashback label + arrow */}
         <div className="flex items-center justify-between mt-2 pt-2"
           style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
           {venue.cashbackPercentage > 0 ? (
@@ -198,6 +187,9 @@ const VenueCard = ({ venue, onClick }) => {
     </div>
   );
 };
+
+// exported so FavoritesPage can reuse
+export { VenueCard, CAT_META, CATS };
 
 // ── Footer ────────────────────────────────────────────────────────────────────
 const FOOTER_COLS = [
@@ -251,8 +243,16 @@ export const HomePage = () => {
   const [venuePage,   setVenuePage]   = useState(1);
   const [search,      setSearch]      = useState('');
   const [category,    setCategory]    = useState('all');
+  const [favoriteIds, setFavoriteIds] = useState(new Set());
   const sentinelRef = useRef(null);
   const navigate = useNavigate();
+
+  // load favorite IDs once so cards render with correct heart state
+  useEffect(() => {
+    getFavoriteIds()
+      .then((res) => setFavoriteIds(new Set(res.data?.ids || [])))
+      .catch(() => {});
+  }, []);
 
   const fetchVenues = useCallback(async (pg, append = false) => {
     if (pg === 1) setLoading(true); else setLoadingMore(true);
@@ -295,6 +295,14 @@ export const HomePage = () => {
     return () => observer.disconnect();
   }, [hasMore, loading, loadingMore, venuePage, fetchVenues]);
 
+  const handleLikeToggle = (venueId, liked) => {
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      liked ? next.add(venueId) : next.delete(venueId);
+      return next;
+    });
+  };
+
   const activeCat = CATS.find((c) => c.value === category);
 
   return (
@@ -323,9 +331,9 @@ export const HomePage = () => {
         {!loading && venues.length > 0 && (
           <div className="flex items-center gap-4 md:gap-6 mb-6 overflow-x-auto no-scrollbar pb-1">
             {[
-              { label: 'Partner Venues',   value: venues.length + '+' },
-              { label: 'Upcoming Events',  value: events.length > 0 ? events.length + '+' : '—' },
-              { label: 'Cities',           value: [...new Set(venues.map((v) => v.city).filter(Boolean))].length + '+' },
+              { label: 'Partner Venues',  value: venues.length + '+' },
+              { label: 'Upcoming Events', value: events.length > 0 ? events.length + '+' : '—' },
+              { label: 'Cities',          value: [...new Set(venues.map((v) => v.city).filter(Boolean))].length + '+' },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-center gap-2 flex-shrink-0">
                 <p className="text-base font-bold text-white">{value}</p>
@@ -349,11 +357,9 @@ export const HomePage = () => {
             style={{ borderRadius: '14px' }}
           />
           {search && (
-            <button
-              onClick={() => setSearch('')}
+            <button onClick={() => setSearch('')}
               className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full"
-              style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: T.sub }}
-            >
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: T.sub }}>
               <X className="w-3 h-3" />
             </button>
           )}
@@ -364,15 +370,12 @@ export const HomePage = () => {
           {CATS.map(({ value, label, Icon }) => {
             const active = category === value;
             return (
-              <button
-                key={value}
-                onClick={() => setCategory(value)}
+              <button key={value} onClick={() => setCategory(value)}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-all duration-200"
                 style={active
                   ? { backgroundColor: T.gold, color: '#000' }
                   : { backgroundColor: T.cardLite, color: T.sub, border: `1px solid ${T.border}` }
-                }
-              >
+                }>
                 <Icon className="w-4 h-4" />{label}
               </button>
             );
@@ -388,15 +391,11 @@ export const HomePage = () => {
                 : `${activeCat?.label === 'All' ? 'Featured' : activeCat?.label} Venues`}
             </h2>
             {!search && (
-              <p className="text-xs mt-0.5" style={{ color: T.dim }}>
-                Handpicked experiences for your lifestyle
-              </p>
+              <p className="text-xs mt-0.5" style={{ color: T.dim }}>Handpicked experiences for your lifestyle</p>
             )}
           </div>
           {!loading && venues.length > 0 && (
-            <span className="text-sm flex-shrink-0 ml-4" style={{ color: T.dim }}>
-              {venues.length} shown
-            </span>
+            <span className="text-sm flex-shrink-0 ml-4" style={{ color: T.dim }}>{venues.length} shown</span>
           )}
         </div>
 
@@ -419,7 +418,13 @@ export const HomePage = () => {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-2 mb-6">
               {venues.map((venue) => (
-                <VenueCard key={venue._id} venue={venue} onClick={() => navigate(`/venues/${venue._id}`)} />
+                <VenueCard
+                  key={venue._id}
+                  venue={venue}
+                  onClick={() => navigate(`/venues/${venue._id}`)}
+                  initialLiked={favoriteIds.has(venue._id)}
+                  onLikeToggle={handleLikeToggle}
+                />
               ))}
             </div>
             <div ref={sentinelRef} className="h-1" />
@@ -471,9 +476,7 @@ export const HomePage = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-semibold text-sm truncate">{event.title}</p>
                     {event.venueId?.name && (
-                      <p className="text-xs truncate mt-0.5" style={{ color: T.dim }}>
-                        {event.venueId.name}
-                      </p>
+                      <p className="text-xs truncate mt-0.5" style={{ color: T.dim }}>{event.venueId.name}</p>
                     )}
                     {event.date && (
                       <div className="flex items-center gap-1 mt-0.5">

@@ -49,6 +49,67 @@ router.patch('/me', authenticateToken, async (req, res) => {
   }
 });
 
+// ── Favorites ─────────────────────────────────────────────────────────────────
+
+// GET /users/favorites/ids  — lightweight: just the array of favorited venue IDs
+router.get('/favorites/ids', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ firebaseUid: req.user.uid }).select('favorites');
+    if (!user) return res.json({ ids: [] });
+    res.json({ ids: user.favorites.map((id) => id.toString()) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch favorite IDs' });
+  }
+});
+
+// GET /users/favorites  — paginated list of full venue objects
+router.get('/favorites', authenticateToken, async (req, res) => {
+  try {
+    const { page = 1, limit = 12 } = req.query;
+    const pg  = parseInt(page,  10);
+    const lim = parseInt(limit, 10);
+
+    const user = await User.findOne({ firebaseUid: req.user.uid }).select('favorites');
+    if (!user) return res.json({ venues: [], total: 0, page: pg, limit: lim });
+
+    const total  = user.favorites.length;
+    const sliced = user.favorites.slice((pg - 1) * lim, pg * lim);
+
+    const venues = await Venue.find({ _id: { $in: sliced }, status: 'active' });
+
+    // preserve user's saved order
+    const ordered = sliced
+      .map((id) => venues.find((v) => v._id.toString() === id.toString()))
+      .filter(Boolean);
+
+    res.json({ venues: ordered, total, page: pg, limit: lim });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch favorites' });
+  }
+});
+
+// POST /users/favorites/:venueId  — toggle (add / remove)
+router.post('/favorites/:venueId', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ firebaseUid: req.user.uid });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const vid    = req.params.venueId;
+    const exists = user.favorites.some((id) => id.toString() === vid);
+
+    if (exists) {
+      user.favorites = user.favorites.filter((id) => id.toString() !== vid);
+    } else {
+      user.favorites.push(vid);
+    }
+
+    await user.save();
+    res.json({ favorited: !exists, total: user.favorites.length });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to toggle favorite' });
+  }
+});
+
 router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { role, subscription, page = 1, limit = 20 } = req.query;

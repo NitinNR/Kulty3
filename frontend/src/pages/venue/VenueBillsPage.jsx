@@ -57,8 +57,8 @@ export const VenueBillsPage = () => {
         const venueRes = await getMyVenue();
         const venues   = venueRes.data?.venues || [];
         if (!venues.length) { setLoading(false); return; }
-        const res     = await getVenueEntries(venues[0]._id);
-        const entries = Array.isArray(res.data) ? res.data : [];
+        const res     = await getVenueEntries(venues[0]._id, { limit: 500 });
+        const entries = res.data?.entries || [];
         const flat    = [];
         entries.forEach((entry) => {
           (entry.bills || []).forEach((bill) => {
@@ -110,10 +110,10 @@ export const VenueBillsPage = () => {
   }, {});
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: T.bg }}>
+    <div className="min-h-screen pb-24" style={{ backgroundColor: T.bg }}>
       {/* Header */}
       <div
-        className="sticky top-0 z-30 px-5 py-4 flex items-center gap-4"
+        className="sticky top-0 z-30 px-4 py-4 flex items-center gap-4"
         style={{ backgroundColor: T.bg, borderBottom: `1px solid ${T.border}` }}
       >
         <button onClick={() => navigate('/venue')} style={{ color: T.muted }}>
@@ -204,9 +204,8 @@ export const VenueBillsPage = () => {
                     <StatusBadge status={bill.status} />
                   </div>
 
-                  {/* Bill details */}
-                  <div className="flex items-center gap-4">
-                    {/* Thumbnail */}
+                  {/* Bill details — thumbnail + amount */}
+                  <div className="flex items-center gap-4 mb-3">
                     {bill.imageUrl ? (
                       <button
                         onClick={() => setPreviewImg(bill.imageUrl)}
@@ -223,35 +222,35 @@ export const VenueBillsPage = () => {
                         <ImageIcon className="w-5 h-5" style={{ color: T.dim }} />
                       </div>
                     )}
-
-                    <div className="flex-1">
+                    <div>
+                      <p className="text-xs mb-0.5" style={{ color: T.muted }}>Amount</p>
                       <p className="text-2xl font-bold" style={{ color: T.text }}>₹{bill.amount}</p>
                     </div>
-
-                    {/* Actions for pending */}
-                    {bill.status === 'pending' && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => doVerdict(entryId, bill._id, 'approved')}
-                          disabled={isUpdating}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition"
-                          style={{ backgroundColor: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => openReject(entryId, bill._id)}
-                          disabled={isUpdating}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition"
-                          style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}
-                        >
-                          <XCircle className="w-4 h-4" />
-                          Reject
-                        </button>
-                      </div>
-                    )}
                   </div>
+
+                  {/* Actions for pending — full width on mobile */}
+                  {bill.status === 'pending' && (
+                    <div className="flex gap-2 mt-1">
+                      <button
+                        onClick={() => doVerdict(entryId, bill._id, 'approved')}
+                        disabled={isUpdating}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition"
+                        style={{ backgroundColor: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => openReject(entryId, bill._id)}
+                        disabled={isUpdating}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition"
+                        style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Reject
+                      </button>
+                    </div>
+                  )}
 
                   {bill.note && (
                     <p

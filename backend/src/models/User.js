@@ -27,6 +27,7 @@ const userSchema = new mongoose.Schema({
     razorpayPaymentId: String,
     razorpaySubscriptionId: String,
   },
+  favorites: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Venue' }],
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

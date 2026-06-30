@@ -136,7 +136,7 @@ router.post('/:entryId/bills', authenticateToken, async (req, res) => {
   }
 });
 
-router.patch('/:entryId/bills/:billId', authenticateToken, requireRole(['venue_owner']), async (req, res) => {
+router.patch('/:entryId/bills/:billId', authenticateToken, requireRole(['venue_owner', 'venue_staff']), async (req, res) => {
   try {
     const { entryId, billId } = req.params;
     const { status, note } = req.body;

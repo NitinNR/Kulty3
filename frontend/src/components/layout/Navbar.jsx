@@ -5,11 +5,12 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
 const NAV_LINKS = [
-  { label: 'Venues',     href: '/home'    },
-  { label: 'Events',     href: '/events'  },
-  { label: 'History',    href: '/entries' },
-  { label: 'Membership', href: '/card'    },
-  { label: 'Profile',    href: '/profile' },
+  { label: 'Venues',     href: '/home'      },
+  { label: 'Events',     href: '/events'    },
+  { label: 'Saved',      href: '/favorites' },
+  { label: 'History',    href: '/entries'   },
+  { label: 'Membership', href: '/card'      },
+  { label: 'Profile',    href: '/profile'   },
 ];
 
 export const Navbar = () => {
