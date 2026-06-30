@@ -3,15 +3,13 @@
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
   "functions": {
-    "backend/src/server.js": {
-      "runtime": "@vercel/node",
+    "api/index.js": {
       "memory": 512,
       "maxDuration": 30
     }
   },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/backend/src/server.js" },
-    { "source": "/health",     "destination": "/backend/src/server.js" },
+    { "source": "/api/:path*", "destination": "/api/index.js" },
     { "source": "/(.*)",       "destination": "/index.html" }
   ]
 }
