@@ -18,9 +18,6 @@ import paymentsRoutes     from './routes/payments.js';
 import adminRoutes        from './routes/admin.js';
 import applicationsRoutes from './routes/applications.js';
 
-// Kick off DB connection (cached — safe to call on every cold start)
-connectDB().catch((err) => console.error('DB connect failed:', err));
-
 const app = express();
 
 // Allow the deployed frontend origin + localhost in dev
@@ -43,6 +40,17 @@ app.use(express.json({
   limit: '10mb',
   verify: (req, _res, buf) => { req.rawBody = buf; },
 }));
+
+// Ensure DB is connected before any route runs (serverless-safe; cached on warm invocations)
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('DB connection failed:', err);
+    res.status(503).json({ error: 'Service temporarily unavailable' });
+  }
+});
 
 app.use('/api/auth',         authRoutes);
 app.use('/api/users',        usersRoutes);
