@@ -113,28 +113,38 @@ export const ScannerPage = () => {
 
       <div className="max-w-sm mx-auto px-4 py-8 space-y-5">
         {/* Status banners */}
-        {status === 'success' && result && (
-          <div
-            className="rounded-2xl p-5 text-center"
-            style={{ backgroundColor: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)' }}
-          >
-            <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: '#10b981' }} />
-            <p className="font-bold text-lg" style={{ color: '#10b981' }}>Entry Logged!</p>
-            {result.memberPhoto && (
-              <img
-                src={result.memberPhoto}
-                alt={result.memberName}
-                className="w-16 h-16 rounded-full object-cover mx-auto mt-3"
-                style={{ border: '2px solid #10b981' }}
-              />
-            )}
-            <p className="mt-3 font-bold text-xl" style={{ color: T.text }}>{result.memberName}</p>
-            {result.membershipId && (
-              <p className="text-xs font-mono mt-1" style={{ color: T.muted }}>{result.membershipId}</p>
-            )}
-            <p className="text-sm mt-2" style={{ color: 'rgba(16,185,129,0.7)' }}>Welcome to the venue!</p>
-          </div>
-        )}
+        {status === 'success' && result && (() => {
+          const duplicate = result.alreadyCheckedIn;
+          const accent    = duplicate ? '#f59e0b' : '#10b981';
+          const accentBg  = duplicate ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)';
+          const accentBdr = duplicate ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)';
+          return (
+            <div
+              className="rounded-2xl p-5 text-center"
+              style={{ backgroundColor: accentBg, border: `1px solid ${accentBdr}` }}
+            >
+              <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: accent }} />
+              <p className="font-bold text-lg" style={{ color: accent }}>
+                {duplicate ? 'Already Checked In Today' : 'Entry Logged!'}
+              </p>
+              {result.memberPhoto && (
+                <img
+                  src={result.memberPhoto}
+                  alt={result.memberName}
+                  className="w-16 h-16 rounded-full object-cover mx-auto mt-3"
+                  style={{ border: `2px solid ${accent}` }}
+                />
+              )}
+              <p className="mt-3 font-bold text-xl" style={{ color: T.text }}>{result.memberName}</p>
+              {result.membershipId && (
+                <p className="text-xs font-mono mt-1" style={{ color: T.muted }}>{result.membershipId}</p>
+              )}
+              <p className="text-sm mt-2" style={{ color: accent + 'cc' }}>
+                {duplicate ? 'No new entry created — already logged today' : 'Welcome to the venue!'}
+              </p>
+            </div>
+          );
+        })()}
 
         {status === 'error' && (
           <div

@@ -44,6 +44,29 @@ router.post('/scan', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Membership is inactive or expired' });
     }
 
+    // Prevent duplicate entries: one entry per member per venue per calendar day (UTC)
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
+    const existing = await Entry.findOne({
+      userId: member._id,
+      venueId,
+      scannedAt: { $gte: startOfDay, $lte: endOfDay },
+    });
+
+    if (existing) {
+      return res.status(200).json({
+        entry: existing,
+        memberName: member.name,
+        memberPhoto: member.profilePhoto,
+        membershipId: member.membershipId,
+        alreadyCheckedIn: true,
+        message: `${member.name} already checked in at this venue today`,
+      });
+    }
+
     const entry = new Entry({
       userId: member._id,
       venueId,
@@ -58,6 +81,7 @@ router.post('/scan', authenticateToken, async (req, res) => {
       memberName: member.name,
       memberPhoto: member.profilePhoto,
       membershipId: member.membershipId,
+      alreadyCheckedIn: false,
     });
   } catch (error) {
     console.error('Error scanning entry:', error);
