@@ -1,5 +1,3 @@
-// Vercel serverless entry point — re-exports the Express app.
-// Vercel calls this file as a function handler for all /api/* requests.
-import app from '../backend/src/server.js';
-
-export default app;
+// This file is intentionally empty.
+// The actual serverless entry point is backend/api.js
+// which is adjacent to backend/node_modules/ for correct dependency resolution.
