@@ -2,77 +2,71 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Load .env for local dev; on Vercel env vars come from the dashboard
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-// Load environment variables FIRST - before anything else
-const envPath = path.resolve(__dirname, '../.env');
-console.log('📁 Loading .env from:', envPath);
+import express from 'express';
+import cors from 'cors';
+import { connectDB } from './config/db.js';
+import authRoutes         from './routes/auth.js';
+import usersRoutes        from './routes/users.js';
+import venuesRoutes       from './routes/venues.js';
+import eventsRoutes       from './routes/events.js';
+import entriesRoutes      from './routes/entries.js';
+import paymentsRoutes     from './routes/payments.js';
+import adminRoutes        from './routes/admin.js';
+import applicationsRoutes from './routes/applications.js';
 
-const result = dotenv.config({ path: envPath });
+// Kick off DB connection (cached — safe to call on every cold start)
+connectDB().catch((err) => console.error('DB connect failed:', err));
 
-if (result.error) {
-  console.error('❌ Error loading .env file:', result.error.message);
-} else {
-  console.log('✓ .env file loaded successfully');
-  console.log('  - FIREBASE_PROJECT_ID:', process.env.FIREBASE_PROJECT_ID ? '✓' : '✗');
-  console.log('  - FIREBASE_PRIVATE_KEY:', process.env.FIREBASE_PRIVATE_KEY ? '✓' : '✗');
-  console.log('  - FIREBASE_CLIENT_EMAIL:', process.env.FIREBASE_CLIENT_EMAIL ? '✓' : '✗');
-  console.log('  - MONGODB_URI:', process.env.MONGODB_URI ? '✓' : '✗');
-  console.log('  - RAZORPAY_KEY_ID:', process.env.RAZORPAY_KEY_ID ? '✓' : '✗');
-}
+const app = express();
 
-// Now dynamically import everything else
-const main = async () => {
-  const express = (await import('express')).default;
-  const cors = (await import('cors')).default;
-  const { connectDB } = await import('./config/db.js');
-  const authRoutes = (await import('./routes/auth.js')).default;
-  const usersRoutes = (await import('./routes/users.js')).default;
-  const venuesRoutes = (await import('./routes/venues.js')).default;
-  const eventsRoutes = (await import('./routes/events.js')).default;
-  const entriesRoutes = (await import('./routes/entries.js')).default;
-  const paymentsRoutes = (await import('./routes/payments.js')).default;
-  const adminRoutes = (await import('./routes/admin.js')).default;
-  const applicationsRoutes = (await import('./routes/applications.js')).default;
+// Allow the deployed frontend origin + localhost in dev
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:4173',
+  process.env.FRONTEND_URL, // set this to your Vercel frontend URL in production
+].filter(Boolean);
 
-  const app = express();
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: ${origin} not allowed`));
+  },
+  credentials: true,
+}));
+
+// Capture raw body for Razorpay webhook signature verification
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buf) => { req.rawBody = buf; },
+}));
+
+app.use('/api/auth',         authRoutes);
+app.use('/api/users',        usersRoutes);
+app.use('/api/venues',       venuesRoutes);
+app.use('/api/events',       eventsRoutes);
+app.use('/api/entries',      entriesRoutes);
+app.use('/api/payments',     paymentsRoutes);
+app.use('/api/admin',        adminRoutes);
+app.use('/api/applications', applicationsRoutes);
+
+app.get('/health', (_req, res) => res.json({ status: 'OK' }));
+
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Local development only — Vercel invokes the exported app directly
+if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 5000;
-
-  app.use(cors());
-  app.use(express.json({ limit: '10mb' }));
-
-  // Connect to database
-  connectDB().catch(err => {
-    console.error('Database connection failed:', err);
-    process.exit(1);
-  });
-
-  app.use('/api/auth', authRoutes);
-  app.use('/api/users', usersRoutes);
-  app.use('/api/venues', venuesRoutes);
-  app.use('/api/events', eventsRoutes);
-  app.use('/api/entries', entriesRoutes);
-  app.use('/api/payments', paymentsRoutes);
-  app.use('/api/admin', adminRoutes);
-  app.use('/api/applications', applicationsRoutes);
-
-  app.get('/health', (req, res) => {
-    res.json({ status: 'OK' });
-  });
-
-  app.use((err, req, res, next) => {
-    console.error(err);
-    res.status(500).json({ error: 'Internal server error' });
-  });
-
   app.listen(PORT, () => {
     console.log(`\n🚀 Server running on http://localhost:${PORT}`);
-    console.log('📚 API available at http://localhost:' + PORT + '/api\n');
+    console.log(`📚 API at http://localhost:${PORT}/api\n`);
   });
-};
+}
 
-// Run the main function
-main().catch(err => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+export default app;
