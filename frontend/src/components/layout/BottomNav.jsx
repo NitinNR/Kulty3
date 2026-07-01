@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 const NAV_ITEMS = [
   { path: '/home',      icon: Compass,      label: 'Discover'   },
   { path: '/events',    icon: CalendarDays, label: 'Events'     },
-  { path: '/favorites', icon: Heart,        label: 'Saved'      },
+  // { path: '/favorites', icon: Heart,        label: 'Saved'      },
   { path: '/card',      icon: CreditCard,   label: 'Membership' },
   { path: '/profile',   icon: User,         label: 'Profile'    },
 ];

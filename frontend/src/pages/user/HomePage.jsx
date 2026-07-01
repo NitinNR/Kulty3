@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Search, MapPin, Star, Heart, ChevronRight, X,
-  LayoutGrid, Utensils, Music, Leaf, Coffee, Wine, GlassWater,
+  Search, MapPin, Star, ChevronRight, X,
+  LayoutGrid, Utensils, Music, Coffee,
   Compass, Camera, AtSign, Sparkles, CalendarDays, TrendingUp, Clock,
 } from 'lucide-react';
-import { getVenues, getEvents, getFavoriteIds, toggleFavorite } from '../../services/api';
+import { getVenues, getEvents } from '../../services/api';
 import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
 import { useNavigate } from 'react-router-dom';
@@ -21,12 +21,9 @@ const T = {
 
 const CATS = [
   { value: 'all',        label: 'All',        Icon: LayoutGrid  },
+  { value: 'club',       label: 'Clubs',      Icon: Music       },
   { value: 'restaurant', label: 'Restaurant', Icon: Utensils    },
-  { value: 'club',       label: 'Club',       Icon: Music       },
-  { value: 'spa',        label: 'Spa',        Icon: Leaf        },
-  { value: 'cafe',       label: 'Café',       Icon: Coffee      },
-  { value: 'lounge',     label: 'Lounge',     Icon: Wine        },
-  { value: 'bar',        label: 'Bar',        Icon: GlassWater  },
+  { value: 'cafe',       label: 'Cafe',       Icon: Coffee      },
 ];
 
 const CAT_META = {
@@ -69,31 +66,12 @@ const VenueCardSkeleton = () => (
 );
 
 // ── Venue card ────────────────────────────────────────────────────────────────
-const VenueCard = ({ venue, onClick, initialLiked = false, onLikeToggle }) => {
-  const [liked, setLiked] = useState(initialLiked);
-  const [pop,   setPop]   = useState(false);
-
-  // sync when parent's favoriteIds set loads after venues
-  useEffect(() => { setLiked(initialLiked); }, [initialLiked]);
-
+const VenueCard = ({ venue, onClick }) => {
   const cat     = venue.category?.toLowerCase() || 'other';
   const meta    = CAT_META[cat] || CAT_META.other;
   const CatIcon = CATS.find((c) => c.value === cat)?.Icon || LayoutGrid;
   const rating  = stableRating(venue.name);
   const tags    = (venue.amenities || []).filter(Boolean).slice(0, 3);
-
-  const handleToggle = async (e) => {
-    e.stopPropagation();
-    const next = !liked;
-    setLiked(next);
-    if (next) { setPop(true); setTimeout(() => setPop(false), 600); }
-    try {
-      await toggleFavorite(venue._id);
-      onLikeToggle?.(venue._id, next);
-    } catch {
-      setLiked(!next); // revert on error
-    }
-  };
 
   return (
     <div
@@ -123,14 +101,6 @@ const VenueCard = ({ venue, onClick, initialLiked = false, onLikeToggle }) => {
             MEMBER
           </div>
         )}
-
-        <button
-          onClick={handleToggle}
-          className={`absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full transition-transform duration-150 ${pop ? 'scale-125' : 'scale-100'}`}
-          style={{ backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
-        >
-          <Heart className={`w-4 h-4 transition-all duration-200 ${liked ? 'fill-red-400 text-red-400' : 'text-white'}`} />
-        </button>
 
         <div className="absolute bottom-3 left-3 flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
           style={{ backgroundColor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', color: '#ddd' }}>
@@ -220,7 +190,7 @@ const Footer = () => (
       style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
       <p className="text-xs" style={{ color: '#333' }}>© 2024 Kulty Premium Discovery. All rights reserved.</p>
       <div className="flex items-center gap-2">
-        {[Compass, GlassWater, Camera, AtSign].map((Icon, i) => (
+        {[Compass, Music, Camera, AtSign].map((Icon, i) => (
           <button key={i} className="w-8 h-8 flex items-center justify-center rounded-full transition hover:opacity-80"
             style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}>
             <Icon className="w-4 h-4" style={{ color: T.dim }} />
@@ -243,16 +213,8 @@ export const HomePage = () => {
   const [venuePage,   setVenuePage]   = useState(1);
   const [search,      setSearch]      = useState('');
   const [category,    setCategory]    = useState('all');
-  const [favoriteIds, setFavoriteIds] = useState(new Set());
   const sentinelRef = useRef(null);
   const navigate = useNavigate();
-
-  // load favorite IDs once so cards render with correct heart state
-  useEffect(() => {
-    getFavoriteIds()
-      .then((res) => setFavoriteIds(new Set(res.data?.ids || [])))
-      .catch(() => {});
-  }, []);
 
   const fetchVenues = useCallback(async (pg, append = false) => {
     if (pg === 1) setLoading(true); else setLoadingMore(true);
@@ -294,14 +256,6 @@ export const HomePage = () => {
     if (el) observer.observe(el);
     return () => observer.disconnect();
   }, [hasMore, loading, loadingMore, venuePage, fetchVenues]);
-
-  const handleLikeToggle = (venueId, liked) => {
-    setFavoriteIds((prev) => {
-      const next = new Set(prev);
-      liked ? next.add(venueId) : next.delete(venueId);
-      return next;
-    });
-  };
 
   const activeCat = CATS.find((c) => c.value === category);
 
@@ -422,8 +376,6 @@ export const HomePage = () => {
                   key={venue._id}
                   venue={venue}
                   onClick={() => navigate(`/venues/${venue._id}`)}
-                  initialLiked={favoriteIds.has(venue._id)}
-                  onLikeToggle={handleLikeToggle}
                 />
               ))}
             </div>
