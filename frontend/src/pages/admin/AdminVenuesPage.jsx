@@ -6,7 +6,6 @@ import { Spinner } from '../../components/common/Spinner';
 import { Pagination } from '../../components/common/Pagination';
 
 const CATEGORIES = ['restaurant', 'club', 'spa', 'cafe', 'lounge', 'bar', 'other'];
-const LIMIT = 20;
 
 const EMPTY_FORM = {
   name: '', description: '', category: 'restaurant', address: '', city: '',
@@ -19,6 +18,7 @@ export const AdminVenuesPage = () => {
   const [loading, setLoading] = useState(true);
   const [total,   setTotal]   = useState(0);
   const [page,    setPage]    = useState(1);
+  const [limit,   setLimit]   = useState(20);
   const [search,  setSearch]  = useState('');
   const [modal,   setModal]   = useState(null);
   const [form,    setForm]    = useState(EMPTY_FORM);
@@ -26,10 +26,10 @@ export const AdminVenuesPage = () => {
   const [editId,  setEditId]  = useState(null);
   const navigate = useNavigate();
 
-  const load = async (pg = 1, q = '') => {
+  const load = async (pg = 1, q = '', lim = limit) => {
     setLoading(true);
     try {
-      const params = { page: pg, limit: LIMIT };
+      const params = { page: pg, limit: lim };
       if (q) params.search = q;
       const [venueRes, userRes] = await Promise.all([
         getAdminVenues(params),
@@ -46,9 +46,9 @@ export const AdminVenuesPage = () => {
   };
 
   useEffect(() => {
-    const t = setTimeout(() => load(page, search), search ? 400 : 0);
+    const t = setTimeout(() => load(page, search, limit), search ? 400 : 0);
     return () => clearTimeout(t);
-  }, [page, search]);
+  }, [page, search, limit]);
 
   const openAdd  = () => { setForm(EMPTY_FORM); setEditId(null); setModal('add'); };
   const openEdit = (venue) => {
@@ -178,12 +178,11 @@ export const AdminVenuesPage = () => {
               )}
             </div>
 
-            <Pagination page={page} total={total} limit={LIMIT} onChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
-            {total > 0 && (
-              <p className="text-center text-xs text-gray-400 mt-3">
-                Showing {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total}
-              </p>
-            )}
+            <Pagination
+              page={page} total={total} limit={limit}
+              onChange={(p) => { setPage(p); window.scrollTo(0, 0); }}
+              onLimitChange={(l) => { setLimit(l); setPage(1); }}
+            />
           </>
         )}
       </div>

@@ -7,7 +7,6 @@ import { Pagination } from '../../components/common/Pagination';
 import { format } from 'date-fns';
 
 const STATUSES = ['upcoming', 'ongoing', 'past'];
-const LIMIT = 20;
 
 const EMPTY_FORM = {
   title: '', description: '', venueId: '', date: '', time: '',
@@ -20,6 +19,7 @@ export const AdminEventsPage = () => {
   const [loading, setLoading] = useState(true);
   const [total,   setTotal]   = useState(0);
   const [page,    setPage]    = useState(1);
+  const [limit,   setLimit]   = useState(20);
   const [filter,  setFilter]  = useState('');
   const [modal,   setModal]   = useState(null);
   const [form,    setForm]    = useState(EMPTY_FORM);
@@ -27,10 +27,10 @@ export const AdminEventsPage = () => {
   const [editId,  setEditId]  = useState(null);
   const navigate = useNavigate();
 
-  const load = async (pg = 1, status = '') => {
+  const load = async (pg = 1, status = '', lim = limit) => {
     setLoading(true);
     try {
-      const params = { page: pg, limit: LIMIT };
+      const params = { page: pg, limit: lim };
       if (status) params.status = status;
       const [eventsRes, venuesRes] = await Promise.all([
         getAdminEvents(params),
@@ -46,7 +46,7 @@ export const AdminEventsPage = () => {
     }
   };
 
-  useEffect(() => { load(page, filter); }, [page, filter]);
+  useEffect(() => { load(page, filter, limit); }, [page, filter, limit]);
 
   const openAdd  = () => { setForm(EMPTY_FORM); setEditId(null); setModal('add'); };
   const openEdit = (event) => {
@@ -179,12 +179,11 @@ export const AdminEventsPage = () => {
               )}
             </div>
 
-            <Pagination page={page} total={total} limit={LIMIT} onChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
-            {total > 0 && (
-              <p className="text-center text-xs text-gray-400 mt-3">
-                Showing {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total}
-              </p>
-            )}
+            <Pagination
+              page={page} total={total} limit={limit}
+              onChange={(p) => { setPage(p); window.scrollTo(0, 0); }}
+              onLimitChange={(l) => { setLimit(l); setPage(1); }}
+            />
           </>
         )}
       </div>

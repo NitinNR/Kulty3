@@ -73,16 +73,24 @@ router.get('/entries', authenticateToken, requireRole(['admin']), async (req, re
   }
 });
 
-// Applications — list all with optional status filter
+// Applications — paginated list with optional status filter
 router.get('/applications', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, page = 1, limit = 20 } = req.query;
     const filter = status ? { status } : {};
-    const applications = await VenueApplication.find(filter)
-      .populate('userId', 'name email profilePhoto')
-      .sort({ createdAt: -1 });
-    const pending = await VenueApplication.countDocuments({ status: 'pending' });
-    res.json({ applications, pending });
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [applications, total, pending] = await Promise.all([
+      VenueApplication.find(filter)
+        .populate('userId', 'name email profilePhoto')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      VenueApplication.countDocuments(filter),
+      VenueApplication.countDocuments({ status: 'pending' }),
+    ]);
+
+    res.json({ applications, total, pending, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch applications' });
   }
@@ -185,21 +193,6 @@ router.get('/events', authenticateToken, requireRole(['admin']), async (req, res
   }
 });
 
-router.patch('/users/:id/role', authenticateToken, requireRole(['admin']), async (req, res) => {
-  try {
-    const { role } = req.body;
-    const validRoles = ['user', 'venue_owner', 'admin'];
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({ error: 'Invalid role. Must be user, venue_owner, or admin.' });
-    }
-    const user = await User.findByIdAndUpdate(req.params.id, { role }, { new: true });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ message: 'Role updated', user });
-  } catch (error) {
-    console.error('Error updating role:', error);
-    res.status(500).json({ error: 'Failed to update role' });
-  }
-});
 
 router.get('/bills', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {

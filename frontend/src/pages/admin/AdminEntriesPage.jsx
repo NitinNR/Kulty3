@@ -6,19 +6,18 @@ import { Spinner } from '../../components/common/Spinner';
 import { Pagination } from '../../components/common/Pagination';
 import { format } from 'date-fns';
 
-const LIMIT = 20;
-
 export const AdminEntriesPage = () => {
   const [entries, setEntries] = useState([]);
   const [total,   setTotal]   = useState(0);
   const [loading, setLoading] = useState(true);
   const [page,    setPage]    = useState(1);
+  const [limit,   setLimit]   = useState(20);
   const navigate = useNavigate();
 
-  const fetch = async (pg = 1) => {
+  const fetch = async (pg = 1, lim = limit) => {
     setLoading(true);
     try {
-      const res = await getAllEntries({ page: pg, limit: LIMIT });
+      const res = await getAllEntries({ page: pg, limit: lim });
       setEntries(res.data?.entries || []);
       setTotal(res.data?.total || 0);
     } catch (err) {
@@ -28,7 +27,7 @@ export const AdminEntriesPage = () => {
     }
   };
 
-  useEffect(() => { fetch(page); }, [page]);
+  useEffect(() => { fetch(page, limit); }, [page, limit]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -98,10 +97,11 @@ export const AdminEntriesPage = () => {
               </div>
             </div>
 
-            <Pagination page={page} total={total} limit={LIMIT} onChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
-            <p className="text-center text-xs text-gray-400 mt-3">
-              Showing {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total}
-            </p>
+            <Pagination
+              page={page} total={total} limit={limit}
+              onChange={(p) => { setPage(p); window.scrollTo(0, 0); }}
+              onLimitChange={(l) => { setLimit(l); setPage(1); }}
+            />
           </>
         )}
       </div>

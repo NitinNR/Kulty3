@@ -6,8 +6,6 @@ import { Spinner } from '../../components/common/Spinner';
 import { Pagination } from '../../components/common/Pagination';
 import { format } from 'date-fns';
 
-const LIMIT = 20;
-
 const statusColors = {
   pending:  'bg-amber-100 text-amber-700',
   approved: 'bg-green-100 text-green-700',
@@ -20,13 +18,14 @@ export const AdminBillsPage = () => {
   const [loading,      setLoading]      = useState(true);
   const [filter,       setFilter]       = useState('');
   const [page,         setPage]         = useState(1);
+  const [limit,        setLimit]        = useState(20);
   const [previewImage, setPreviewImage] = useState(null);
   const navigate = useNavigate();
 
-  const load = async (pg = 1, status = '') => {
+  const load = async (pg = 1, status = '', lim = limit) => {
     setLoading(true);
     try {
-      const params = { page: pg, limit: LIMIT };
+      const params = { page: pg, limit: lim };
       if (status) params.status = status;
       const res = await getAllBills(params);
       setBills(res.data?.bills || []);
@@ -38,7 +37,7 @@ export const AdminBillsPage = () => {
     }
   };
 
-  useEffect(() => { load(page, filter); }, [page, filter]);
+  useEffect(() => { load(page, filter, limit); }, [page, filter, limit]);
 
   const handleFilter = (f) => {
     setFilter(f);
@@ -131,10 +130,11 @@ export const AdminBillsPage = () => {
               </div>
             </div>
 
-            <Pagination page={page} total={total} limit={LIMIT} onChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
-            <p className="text-center text-xs text-gray-400 mt-3">
-              Showing {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total}
-            </p>
+            <Pagination
+              page={page} total={total} limit={limit}
+              onChange={(p) => { setPage(p); window.scrollTo(0, 0); }}
+              onLimitChange={(l) => { setLimit(l); setPage(1); }}
+            />
           </>
         )}
       </div>

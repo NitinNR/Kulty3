@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, XCircle, Clock, Building2, MapPin } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Building2, MapPin } from 'lucide-react';
 import { getAdminApplications, approveApplication, rejectApplication, getCities } from '../../services/api';
 import { Spinner } from '../../components/common/Spinner';
+import { Pagination } from '../../components/common/Pagination';
 import { format } from 'date-fns';
 
 export const AdminApplicationsPage = () => {
@@ -13,6 +14,9 @@ export const AdminApplicationsPage = () => {
   const [rejectModal,  setRejectModal]  = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [knownCities,  setKnownCities]  = useState(new Set());
+  const [page,         setPage]         = useState(1);
+  const [limit,        setLimit]        = useState(20);
+  const [total,        setTotal]        = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,17 +25,22 @@ export const AdminApplicationsPage = () => {
       .catch(() => {});
   }, []);
 
-  const load = (status = 'pending') => {
+  const load = (status = filter, pg = page, lim = limit) => {
     setLoading(true);
-    getAdminApplications(status ? { status } : {})
-      .then((res) => setApplications(res.data?.applications || []))
+    const params = { page: pg, limit: lim };
+    if (status) params.status = status;
+    getAdminApplications(params)
+      .then((res) => {
+        setApplications(res.data?.applications || []);
+        setTotal(res.data?.total || 0);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load('pending'); }, []);
+  useEffect(() => { load(filter, page, limit); }, [filter, page, limit]);
 
-  const handleFilter = (f) => { setFilter(f); load(f); };
+  const handleFilter = (f) => { setFilter(f); setPage(1); };
 
   const isNewCity = (city) =>
     city && !knownCities.has(city.toLowerCase());
@@ -81,6 +90,7 @@ export const AdminApplicationsPage = () => {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="text-xl font-bold">Venue Applications</h1>
+        <span className="text-gray-400 text-sm ml-auto">{total} total</span>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-8">
@@ -107,6 +117,7 @@ export const AdminApplicationsPage = () => {
             <p>No {filter} applications</p>
           </div>
         ) : (
+          <>
           <div className="space-y-4">
             {applications.map((app) => (
               <div key={app._id} className="bg-white rounded-xl shadow-sm p-6">
@@ -183,6 +194,12 @@ export const AdminApplicationsPage = () => {
               </div>
             ))}
           </div>
+          <Pagination
+            page={page} total={total} limit={limit}
+            onChange={(p) => { setPage(p); window.scrollTo(0, 0); }}
+            onLimitChange={(l) => { setLimit(l); setPage(1); }}
+          />
+          </>
         )}
       </div>
 

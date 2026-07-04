@@ -52,7 +52,6 @@ export const bootstrapAdmin = (secret) => api.post('/auth/bootstrap-admin', { se
 
 export const getAdminStats = () => api.get('/admin/stats');
 export const getAllUsers = (params) => api.get('/admin/users', { params });
-export const updateUserRole = (userId, role) => api.patch(`/admin/users/${userId}/role`, { role });
 export const getAdminVenues = (params) => api.get('/admin/venues', { params });
 export const getAdminEvents = (params) => api.get('/admin/events', { params });
 export const getAllBills = (params) => api.get('/admin/bills', { params });
