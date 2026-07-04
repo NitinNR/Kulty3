@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search, MapPin, Star, ChevronRight, X,
   LayoutGrid, Utensils, Music, Coffee,
-  Compass, Camera, AtSign, Sparkles, CalendarDays, TrendingUp, Clock,
+  Compass, Camera, AtSign, Sparkles, CalendarDays, TrendingUp, Clock, ChevronDown,
 } from 'lucide-react';
 import { getVenues, getEvents } from '../../services/api';
 import { Navbar } from '../../components/layout/Navbar';
@@ -20,11 +20,12 @@ const T = {
 };
 
 const CATS = [
-  { value: 'all',        label: 'All',        Icon: LayoutGrid  },
   { value: 'club',       label: 'Clubs',      Icon: Music       },
   { value: 'restaurant', label: 'Restaurant', Icon: Utensils    },
   { value: 'cafe',       label: 'Cafe',       Icon: Coffee      },
 ];
+
+const CITIES = ['Nagpur', 'Indore', 'Raipur', 'Jabalpur', 'Pune', 'Mumbai', 'Lucknow'];
 
 const CAT_META = {
   restaurant: { gradient: 'from-orange-500 to-amber-600',   atmo: '🍽️' },
@@ -213,15 +214,19 @@ export const HomePage = () => {
   const [venuePage,   setVenuePage]   = useState(1);
   const [search,      setSearch]      = useState('');
   const [category,    setCategory]    = useState('all');
+  const [city,        setCity]        = useState('');
+  const [cityOpen,    setCityOpen]    = useState(false);
   const sentinelRef = useRef(null);
+  const cityRef     = useRef(null);
   const navigate = useNavigate();
 
   const fetchVenues = useCallback(async (pg, append = false) => {
     if (pg === 1) setLoading(true); else setLoadingMore(true);
     try {
       const params = { page: pg, limit: VENUE_LIMIT };
-      if (search)            params.search   = search;
+      if (search)             params.search   = search;
       if (category !== 'all') params.category = category;
+      if (city)               params.city     = city;
       const vr = await getVenues(params);
       const fetched = vr.data?.venues || [];
       const total   = vr.data?.total  || 0;
@@ -233,18 +238,27 @@ export const HomePage = () => {
     } finally {
       if (pg === 1) setLoading(false); else setLoadingMore(false);
     }
-  }, [search, category]);
+  }, [search, category, city]);
 
   useEffect(() => {
     const t = setTimeout(() => fetchVenues(1, false), search ? 400 : 0);
     return () => clearTimeout(t);
-  }, [search, category]);
+  }, [search, category, city]);
 
   useEffect(() => {
     getEvents({ limit: 4 })
       .then((er) => setEvents(er.data?.events || []))
       .catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (!cityOpen) return;
+    const handler = (e) => {
+      if (cityRef.current && !cityRef.current.contains(e.target)) setCityOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [cityOpen]);
 
   useEffect(() => {
     if (!hasMore || loading || loadingMore) return;
@@ -257,7 +271,7 @@ export const HomePage = () => {
     return () => observer.disconnect();
   }, [hasMore, loading, loadingMore, venuePage, fetchVenues]);
 
-  const activeCat = CATS.find((c) => c.value === category);
+  const activeCat = CATS.find((c) => c.value === category) || null;
 
   return (
     <div className="min-h-screen pb-20 md:pb-0" style={{ backgroundColor: T.bg }}>
@@ -319,21 +333,61 @@ export const HomePage = () => {
           )}
         </div>
 
-        {/* ── Category pills ───────────────────────────────── */}
-        <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1 mb-8">
-          {CATS.map(({ value, label, Icon }) => {
-            const active = category === value;
-            return (
-              <button key={value} onClick={() => setCategory(value)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-all duration-200"
-                style={active
-                  ? { backgroundColor: T.gold, color: '#000' }
-                  : { backgroundColor: T.cardLite, color: T.sub, border: `1px solid ${T.border}` }
-                }>
-                <Icon className="w-4 h-4" />{label}
-              </button>
-            );
-          })}
+        {/* ── City pill + Category pills ───────────────────── */}
+        <div className="flex gap-2.5 mb-8 items-center">
+          {/* City filter — kept outside the scroll container so the dropdown isn't clipped */}
+          <div className="relative flex-shrink-0" ref={cityRef}>
+            <button
+              onClick={() => setCityOpen((o) => !o)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-200"
+              style={city
+                ? { backgroundColor: T.gold, color: '#000' }
+                : { backgroundColor: T.cardLite, color: T.sub, border: `1px solid ${T.border}` }
+              }
+            >
+              <MapPin className="w-4 h-4" />
+              {city || 'City'}
+              {city ? (
+                <X className="w-3.5 h-3.5 ml-0.5" onClick={(e) => { e.stopPropagation(); setCity(''); setCityOpen(false); }} />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
+              )}
+            </button>
+            {cityOpen && (
+              <div
+                className="absolute top-full left-0 mt-2 z-50 rounded-xl overflow-hidden shadow-2xl"
+                style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, minWidth: '160px' }}
+              >
+                {CITIES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => { setCity(c); setCityOpen(false); }}
+                    className="block w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-white/5"
+                    style={{ color: city === c ? T.gold : T.sub }}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Category filters in their own scroll container */}
+          <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1 items-center">
+            {CATS.map(({ value, label, Icon }) => {
+              const active = category === value;
+              return (
+                <button key={value} onClick={() => setCategory(active ? 'all' : value)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-all duration-200"
+                  style={active
+                    ? { backgroundColor: T.gold, color: '#000' }
+                    : { backgroundColor: T.cardLite, color: T.sub, border: `1px solid ${T.border}` }
+                  }>
+                  <Icon className="w-4 h-4" />{label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── Venues section ───────────────────────────────── */}
@@ -342,7 +396,7 @@ export const HomePage = () => {
             <h2 className="text-xl font-display font-bold text-white">
               {search
                 ? `Results for "${search}"`
-                : `${activeCat?.label === 'All' ? 'Featured' : activeCat?.label} Venues`}
+                : `${activeCat ? activeCat.label : city ? city : 'Featured'} Venues`}
             </h2>
             {!search && (
               <p className="text-xs mt-0.5" style={{ color: T.dim }}>Handpicked experiences for your lifestyle</p>
@@ -363,7 +417,7 @@ export const HomePage = () => {
             <p className="text-4xl mb-4">🔍</p>
             <p className="text-white font-semibold mb-1">No venues found</p>
             <p className="text-sm mb-4" style={{ color: T.sub }}>Try a different search or category</p>
-            <button onClick={() => { setSearch(''); setCategory('all'); }}
+            <button onClick={() => { setSearch(''); setCategory('all'); setCity(''); }}
               className="text-sm font-semibold transition hover:opacity-70" style={{ color: T.gold }}>
               Clear filters
             </button>

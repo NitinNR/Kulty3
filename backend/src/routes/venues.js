@@ -25,7 +25,7 @@ router.get('/', optionalAuth, async (req, res) => {
       filter.category = category.toLowerCase();
     }
 
-    if (city) filter.city = city;
+    if (city) filter.city = new RegExp(`^${city}$`, 'i');
 
     const venues = await Venue.find(filter)
       .skip((page - 1) * limit)
