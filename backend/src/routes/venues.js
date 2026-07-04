@@ -130,18 +130,26 @@ router.post('/:id/staff', authenticateToken, requireRole(['venue_owner']), async
     }
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
-    if (venue.staff.includes(email.toLowerCase())) {
-      return res.status(409).json({ error: 'Staff member already added' });
-    }
     const staffEmail = email.toLowerCase().trim();
+
+    if (venue.staff.includes(staffEmail)) {
+      return res.status(409).json({ error: 'This person is already a staff member at your venue.' });
+    }
+
+    // Block any email that belongs to a registered user (any role)
+    const existingUser = await User.findOne({ email: staffEmail });
+    if (existingUser) {
+      return res.status(409).json({ error: 'This user already exists in the system and cannot be added as staff.' });
+    }
+
+    // Also block if the email is in another venue's staff list (invited but not yet registered)
+    const otherVenue = await Venue.findOne({ staff: staffEmail, _id: { $ne: venue._id } });
+    if (otherVenue) {
+      return res.status(409).json({ error: 'This user already exists in the system and cannot be added as staff.' });
+    }
+
     venue.staff.push(staffEmail);
     await venue.save();
-
-    // Upgrade user's role to venue_staff so they can access scanner routes
-    await User.findOneAndUpdate(
-      { email: staffEmail },
-      { $set: { role: 'venue_staff' } }
-    );
 
     res.json({ message: 'Staff added', staff: venue.staff });
   } catch (error) {
