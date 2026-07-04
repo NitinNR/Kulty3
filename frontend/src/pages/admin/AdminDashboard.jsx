@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Building2, QrCode, FileText, LogOut, CalendarDays, ClipboardList } from 'lucide-react';
+import { Users, Building2, QrCode, FileText, LogOut, CalendarDays, ClipboardList, MapPin } from 'lucide-react';
 import { getAdminStats, getAdminApplications } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import { Spinner } from '../../components/common/Spinner';
@@ -42,6 +42,7 @@ export const AdminDashboard = () => {
       icon: ClipboardList,
       badge: pendingApps > 0 ? pendingApps : null,
     },
+    { label: 'Manage Cities', desc: 'Add or remove cities shown in the homepage filter', path: '/admin/cities', icon: MapPin },
     { label: 'Manage Users & Roles', desc: 'Promote users to admin or venue owner', path: '/admin/users', icon: Users },
     { label: 'Venues', desc: 'Add, edit, or deactivate venues', path: '/admin/venues', icon: Building2 },
     { label: 'Events', desc: 'Create and manage member events', path: '/admin/events', icon: CalendarDays },

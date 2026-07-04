@@ -4,6 +4,7 @@ import Venue from '../models/Venue.js';
 import Event from '../models/Event.js';
 import Entry from '../models/Entry.js';
 import VenueApplication from '../models/VenueApplication.js';
+import City from '../models/City.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 
@@ -108,7 +109,17 @@ router.patch('/applications/:id/approve', authenticateToken, requireRole(['admin
     application.reviewedAt = new Date();
     await application.save();
 
-    res.json({ message: 'Approved — user can now log in and create their venue', user, application });
+    // Auto-add the application's city to the cities list if not already present
+    let cityAdded = false;
+    if (application.city) {
+      const exists = await City.findOne({ name: new RegExp(`^${application.city}$`, 'i') });
+      if (!exists) {
+        await City.create({ name: application.city.trim() });
+        cityAdded = true;
+      }
+    }
+
+    res.json({ message: 'Approved — user can now log in and create their venue', user, application, cityAdded });
   } catch (error) {
     console.error('Error approving application:', error);
     res.status(500).json({ error: 'Failed to approve application' });

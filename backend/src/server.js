@@ -17,6 +17,7 @@ import entriesRoutes      from './routes/entries.js';
 import paymentsRoutes     from './routes/payments.js';
 import adminRoutes        from './routes/admin.js';
 import applicationsRoutes from './routes/applications.js';
+import citiesRoutes       from './routes/cities.js';
 
 const app = express();
 
@@ -61,6 +62,7 @@ app.use('/api/entries',      entriesRoutes);
 app.use('/api/payments',     paymentsRoutes);
 app.use('/api/admin',        adminRoutes);
 app.use('/api/applications', applicationsRoutes);
+app.use('/api/cities',       citiesRoutes);
 
 app.get('/health', (_req, res) => res.json({ status: 'OK' }));
 

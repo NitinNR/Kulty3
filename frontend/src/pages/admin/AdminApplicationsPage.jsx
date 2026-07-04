@@ -1,18 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, XCircle, Clock, Building2 } from 'lucide-react';
-import { getAdminApplications, approveApplication, rejectApplication } from '../../services/api';
+import { ArrowLeft, CheckCircle, XCircle, Clock, Building2, MapPin } from 'lucide-react';
+import { getAdminApplications, approveApplication, rejectApplication, getCities } from '../../services/api';
 import { Spinner } from '../../components/common/Spinner';
 import { format } from 'date-fns';
 
 export const AdminApplicationsPage = () => {
   const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('pending');
-  const [processing, setProcessing] = useState(null);
-  const [rejectModal, setRejectModal] = useState(null); // application id
+  const [loading,      setLoading]      = useState(true);
+  const [filter,       setFilter]       = useState('pending');
+  const [processing,   setProcessing]   = useState(null);
+  const [rejectModal,  setRejectModal]  = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [knownCities,  setKnownCities]  = useState(new Set());
   const navigate = useNavigate();
+
+  useEffect(() => {
+    getCities()
+      .then((res) => setKnownCities(new Set((res.data?.cities || []).map((c) => c.toLowerCase()))))
+      .catch(() => {});
+  }, []);
 
   const load = (status = 'pending') => {
     setLoading(true);
@@ -26,10 +33,19 @@ export const AdminApplicationsPage = () => {
 
   const handleFilter = (f) => { setFilter(f); load(f); };
 
+  const isNewCity = (city) =>
+    city && !knownCities.has(city.toLowerCase());
+
   const handleApprove = async (id) => {
     setProcessing(id);
     try {
-      await approveApplication(id);
+      const res = await approveApplication(id);
+      // If the backend added a new city, refresh our known-cities set
+      if (res.data?.cityAdded) {
+        getCities()
+          .then((r) => setKnownCities(new Set((r.data?.cities || []).map((c) => c.toLowerCase()))))
+          .catch(() => {});
+      }
       setApplications((prev) => prev.filter((a) => a._id !== id));
     } catch (err) {
       alert('Failed: ' + (err.response?.data?.error || err.message));
@@ -120,7 +136,15 @@ export const AdminApplicationsPage = () => {
                     <p className="font-semibold text-gray-900 text-lg">{app.businessName}</p>
                     <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full capitalize">{app.category}</span>
                   </div>
-                  <p className="text-sm text-gray-600">{app.city}{app.address ? ` · ${app.address}` : ''}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm text-gray-600">{app.city}{app.address ? ` · ${app.address}` : ''}</p>
+                    {isNewCity(app.city) && (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                        <MapPin className="w-3 h-3" />
+                        New City
+                      </span>
+                    )}
+                  </div>
                   {app.description && <p className="text-sm text-gray-500">{app.description}</p>}
                   <div className="flex gap-4 text-xs text-gray-400 pt-1">
                     {app.contactPhone && <span>📞 {app.contactPhone}</span>}

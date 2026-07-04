@@ -4,7 +4,7 @@ import {
   LayoutGrid, Utensils, Music, Coffee,
   Compass, Camera, AtSign, Sparkles, CalendarDays, TrendingUp, Clock, ChevronDown,
 } from 'lucide-react';
-import { getVenues, getEvents } from '../../services/api';
+import { getVenues, getEvents, getCities } from '../../services/api';
 import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
 import { useNavigate } from 'react-router-dom';
@@ -25,7 +25,7 @@ const CATS = [
   { value: 'cafe',       label: 'Cafe',       Icon: Coffee      },
 ];
 
-const CITIES = ['Nagpur', 'Indore', 'Raipur', 'Jabalpur', 'Pune', 'Mumbai', 'Lucknow'];
+const DEFAULT_CITIES = ['Nagpur', 'Indore', 'Raipur', 'Jabalpur', 'Pune', 'Mumbai', 'Lucknow'];
 
 const CAT_META = {
   restaurant: { gradient: 'from-orange-500 to-amber-600',   atmo: '🍽️' },
@@ -216,6 +216,7 @@ export const HomePage = () => {
   const [category,    setCategory]    = useState('all');
   const [city,        setCity]        = useState('');
   const [cityOpen,    setCityOpen]    = useState(false);
+  const [cityList,    setCityList]    = useState(DEFAULT_CITIES);
   const sentinelRef = useRef(null);
   const cityRef     = useRef(null);
   const navigate = useNavigate();
@@ -249,6 +250,12 @@ export const HomePage = () => {
     getEvents({ limit: 4 })
       .then((er) => setEvents(er.data?.events || []))
       .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    getCities()
+      .then((res) => { if (res.data?.cities?.length) setCityList(res.data.cities); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -358,7 +365,7 @@ export const HomePage = () => {
                 className="absolute top-full left-0 mt-2 z-50 rounded-xl overflow-hidden shadow-2xl"
                 style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, minWidth: '160px' }}
               >
-                {CITIES.map((c) => (
+                {cityList.map((c) => (
                   <button
                     key={c}
                     onClick={() => { setCity(c); setCityOpen(false); }}

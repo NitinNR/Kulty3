@@ -33,6 +33,7 @@ import { AdminEventsPage } from './pages/admin/AdminEventsPage';
 import { AdminEntriesPage } from './pages/admin/AdminEntriesPage';
 import { AdminBillsPage } from './pages/admin/AdminBillsPage';
 import { AdminApplicationsPage } from './pages/admin/AdminApplicationsPage';
+import { AdminCitiesPage } from './pages/admin/AdminCitiesPage';
 
 // Venue owner portal
 import { VenueDashboard } from './pages/venue/VenueDashboard';
@@ -90,6 +91,7 @@ export default function App() {
             <Route path="/admin/entries" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminEntriesPage /></RoleRoute></ProtectedRoute>} />
             <Route path="/admin/bills" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminBillsPage /></RoleRoute></ProtectedRoute>} />
             <Route path="/admin/applications" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminApplicationsPage /></RoleRoute></ProtectedRoute>} />
+            <Route path="/admin/cities" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminCitiesPage /></RoleRoute></ProtectedRoute>} />
 
             {/* Venue owner portal — dashboard/scanner/entries/bills allow staff too */}
             <Route path="/venue" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner', 'venue_staff']}><VenueDashboard /></RoleRoute></ProtectedRoute>} />

@@ -73,4 +73,9 @@ export const getAdminApplications = (params) => api.get('/admin/applications', {
 export const approveApplication = (id) => api.patch(`/admin/applications/${id}/approve`);
 export const rejectApplication = (id, reason) => api.patch(`/admin/applications/${id}/reject`, { reason });
 
+export const getCities      = ()       => api.get('/cities');
+export const getAdminCities = ()       => api.get('/cities/admin');
+export const addCity        = (name)   => api.post('/cities', { name });
+export const deleteCity     = (id)     => api.delete(`/cities/${id}`);
+
 export default api;
