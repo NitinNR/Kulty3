@@ -1,54 +1,38 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  ArrowLeft, CheckCircle2, XCircle, Clock,
-  ImageIcon, ChevronDown, X,
-} from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, Clock, ImageIcon, X } from 'lucide-react';
 import { getMyVenue, getVenueEntries, approveBill } from '../../services/api';
 import { Spinner } from '../../components/common/Spinner';
 import { Pagination } from '../../components/common/Pagination';
 import { format } from 'date-fns';
 
-const T = {
-  bg:     '#0d0d0d',
-  card:   '#141414',
-  lite:   '#1c1c1c',
-  border: 'rgba(255,255,255,0.07)',
-  gold:   '#f59e0b',
-  text:   'rgba(255,255,255,0.85)',
-  muted:  'rgba(255,255,255,0.4)',
-  dim:    'rgba(255,255,255,0.22)',
+const statusBadge = {
+  pending:  { bg: 'bg-amber-50',   text: 'text-amber-600',  label: 'Pending'  },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Approved' },
+  rejected: { bg: 'bg-red-50',     text: 'text-red-500',    label: 'Rejected' },
 };
 
 const StatusBadge = ({ status }) => {
-  const map = {
-    pending:  { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b',  label: 'Pending'  },
-    approved: { bg: 'rgba(16,185,129,0.12)', color: '#10b981',  label: 'Approved' },
-    rejected: { bg: 'rgba(239,68,68,0.12)',  color: '#ef4444',  label: 'Rejected' },
-  };
-  const s = map[status] || map.pending;
+  const s = statusBadge[status] || statusBadge.pending;
   return (
-    <span
-      className="text-xs font-semibold px-2.5 py-1 rounded-full"
-      style={{ backgroundColor: s.bg, color: s.color }}
-    >
+    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${s.bg} ${s.text}`}>
       {s.label}
     </span>
   );
 };
 
 const FILTERS = ['pending', 'approved', 'rejected', 'all'];
-const BILLS_PER_PAGE = 15;
 
 export const VenueBillsPage = () => {
-  const [bills, setBills]         = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [filter, setFilter]       = useState('pending');
-  const [billPage, setBillPage]   = useState(1);
-  const [updating, setUpdating]   = useState(null);
-  const [previewImg, setPreviewImg] = useState(null);
-  const [rejectModal, setRejectModal] = useState(null); // { entryId, billId }
-  const [rejectNote, setRejectNote]   = useState('');
+  const [bills,        setBills]        = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [filter,       setFilter]       = useState('pending');
+  const [billPage,     setBillPage]     = useState(1);
+  const [billsPerPage, setBillsPerPage] = useState(15);
+  const [updating,     setUpdating]     = useState(null);
+  const [previewImg,   setPreviewImg]   = useState(null);
+  const [rejectModal,  setRejectModal]  = useState(null);
+  const [rejectNote,   setRejectNote]   = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -96,13 +80,8 @@ export const VenueBillsPage = () => {
     }
   };
 
-  const openReject = (entryId, billId) => {
-    setRejectModal({ entryId, billId });
-    setRejectNote('');
-  };
-
-  const filtered = filter === 'all' ? bills : bills.filter((b) => b.bill.status === filter);
-  const paginatedBills = filtered.slice((billPage - 1) * BILLS_PER_PAGE, billPage * BILLS_PER_PAGE);
+  const filtered       = filter === 'all' ? bills : bills.filter((b) => b.bill.status === filter);
+  const paginatedBills = filtered.slice((billPage - 1) * billsPerPage, billPage * billsPerPage);
 
   const counts = FILTERS.reduce((acc, f) => {
     acc[f] = f === 'all' ? bills.length : bills.filter((b) => b.bill.status === f).length;
@@ -110,21 +89,16 @@ export const VenueBillsPage = () => {
   }, {});
 
   return (
-    <div className="min-h-screen pb-24" style={{ backgroundColor: T.bg }}>
+    <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
-      <div
-        className="sticky top-0 z-30 px-4 py-4 flex items-center gap-4"
-        style={{ backgroundColor: T.bg, borderBottom: `1px solid ${T.border}` }}
-      >
-        <button onClick={() => navigate('/venue')} style={{ color: T.muted }}>
+      <div className="bg-gray-900 text-white sticky top-0 z-30 px-4 sm:px-6 py-4 flex items-center gap-4">
+        <button onClick={() => navigate('/venue')} className="hover:text-gray-400 transition">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div>
-          <h1 className="font-bold text-lg leading-none" style={{ color: T.text }}>Bill Approvals</h1>
+        <div className="flex-1">
+          <h1 className="font-bold text-lg leading-none">Bill Approvals</h1>
           {!loading && (
-            <p className="text-xs mt-0.5" style={{ color: T.muted }}>
-              {counts.pending} pending review
-            </p>
+            <p className="text-xs text-gray-400 mt-0.5">{counts.pending} pending review</p>
           )}
         </div>
       </div>
@@ -138,11 +112,11 @@ export const VenueBillsPage = () => {
               <button
                 key={f}
                 onClick={() => { setFilter(f); setBillPage(1); }}
-                className="flex-shrink-0 text-sm font-semibold px-4 py-2 rounded-full transition"
-                style={active
-                  ? { backgroundColor: T.gold, color: '#0d0d0d' }
-                  : { backgroundColor: T.card, color: T.muted, border: `1px solid ${T.border}` }
-                }
+                className={`flex-shrink-0 text-sm font-semibold px-4 py-2 rounded-full transition ${
+                  active
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                }`}
               >
                 {f.charAt(0).toUpperCase() + f.slice(1)}
                 <span className="ml-1.5 opacity-60 font-normal">({counts[f]})</span>
@@ -154,139 +128,122 @@ export const VenueBillsPage = () => {
         {loading ? (
           <div className="flex justify-center py-16"><Spinner /></div>
         ) : filtered.length === 0 ? (
-          <div
-            className="rounded-2xl p-12 text-center"
-            style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
-          >
-            <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" style={{ color: T.gold }} />
-            <p className="font-medium" style={{ color: T.muted }}>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+            <Clock className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-400 font-medium">
               No {filter === 'all' ? '' : filter} bills
             </p>
           </div>
         ) : (
           <>
-          <div className="space-y-3">
-            {paginatedBills.map(({ bill, entryId, member }) => {
-              const key        = `${entryId}-${bill._id}`;
-              const isUpdating = updating === key;
+            <div className="space-y-3">
+              {paginatedBills.map(({ bill, entryId, member }) => {
+                const key        = `${entryId}-${bill._id}`;
+                const isUpdating = updating === key;
 
-              return (
-                <div
-                  key={key}
-                  className="rounded-2xl p-5"
-                  style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
-                >
-                  {/* Member row */}
-                  <div className="flex items-center gap-3 mb-4">
-                    {member?.profilePhoto ? (
-                      <img
-                        src={member.profilePhoto}
-                        alt={member.name}
-                        className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-                        style={{ border: `1px solid ${T.border}` }}
-                      />
-                    ) : (
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-                        style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: T.gold }}
-                      >
-                        {member?.name?.[0]?.toUpperCase() || '?'}
+                return (
+                  <div key={key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                    {/* Member row */}
+                    <div className="flex items-center gap-3 mb-4">
+                      {member?.profilePhoto ? (
+                        <img
+                          src={member.profilePhoto}
+                          alt={member.name}
+                          className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-gray-100"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-amber-50 flex items-center justify-center text-sm font-bold text-amber-600 flex-shrink-0">
+                          {member?.name?.[0]?.toUpperCase() || '?'}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-gray-900 truncate">
+                          {member?.name || 'Unknown Member'}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {bill.uploadedAt ? format(new Date(bill.uploadedAt), 'dd MMM yyyy, hh:mm a') : ''}
+                        </p>
+                      </div>
+                      <StatusBadge status={bill.status} />
+                    </div>
+
+                    {/* Bill details */}
+                    <div className="flex items-center gap-4 mb-3">
+                      {bill.imageUrl ? (
+                        <button
+                          onClick={() => setPreviewImg(bill.imageUrl)}
+                          className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border border-gray-100 hover:opacity-80 transition"
+                        >
+                          <img src={bill.imageUrl} alt="bill" className="w-full h-full object-cover" />
+                        </button>
+                      ) : (
+                        <div className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center flex-shrink-0">
+                          <ImageIcon className="w-5 h-5 text-gray-300" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs text-gray-400 mb-0.5">Amount</p>
+                        <p className="text-2xl font-bold text-gray-900">₹{bill.amount}</p>
+                      </div>
+                    </div>
+
+                    {/* Actions for pending */}
+                    {bill.status === 'pending' && (
+                      <div className="flex gap-2 mt-1">
+                        <button
+                          onClick={() => doVerdict(entryId, bill._id, 'approved')}
+                          disabled={isUpdating}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 transition"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => { setRejectModal({ entryId, billId: bill._id }); setRejectNote(''); }}
+                          disabled={isUpdating}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Reject
+                        </button>
                       </div>
                     )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate" style={{ color: T.text }}>
-                        {member?.name || 'Unknown Member'}
-                      </p>
-                      <p className="text-xs" style={{ color: T.muted }}>
-                        {bill.uploadedAt ? format(new Date(bill.uploadedAt), 'dd MMM yyyy, hh:mm a') : ''}
-                      </p>
-                    </div>
-                    <StatusBadge status={bill.status} />
-                  </div>
 
-                  {/* Bill details — thumbnail + amount */}
-                  <div className="flex items-center gap-4 mb-3">
-                    {bill.imageUrl ? (
-                      <button
-                        onClick={() => setPreviewImg(bill.imageUrl)}
-                        className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 transition hover:opacity-80"
-                        style={{ border: `1px solid ${T.border}` }}
-                      >
-                        <img src={bill.imageUrl} alt="bill" className="w-full h-full object-cover" />
-                      </button>
-                    ) : (
-                      <div
-                        className="w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{ border: `1px dashed ${T.border}` }}
-                      >
-                        <ImageIcon className="w-5 h-5" style={{ color: T.dim }} />
-                      </div>
+                    {bill.note && (
+                      <p className="mt-3 text-xs italic text-gray-400 bg-gray-50 rounded-xl px-3 py-2">
+                        "{bill.note}"
+                      </p>
                     )}
-                    <div>
-                      <p className="text-xs mb-0.5" style={{ color: T.muted }}>Amount</p>
-                      <p className="text-2xl font-bold" style={{ color: T.text }}>₹{bill.amount}</p>
-                    </div>
                   </div>
+                );
+              })}
+            </div>
 
-                  {/* Actions for pending — full width on mobile */}
-                  {bill.status === 'pending' && (
-                    <div className="flex gap-2 mt-1">
-                      <button
-                        onClick={() => doVerdict(entryId, bill._id, 'approved')}
-                        disabled={isUpdating}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition"
-                        style={{ backgroundColor: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => openReject(entryId, bill._id)}
-                        disabled={isUpdating}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition"
-                        style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}
-                      >
-                        <XCircle className="w-4 h-4" />
-                        Reject
-                      </button>
-                    </div>
-                  )}
-
-                  {bill.note && (
-                    <p
-                      className="mt-3 text-xs italic rounded-xl px-3 py-2"
-                      style={{ backgroundColor: T.lite, color: T.muted }}
-                    >
-                      "{bill.note}"
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {filtered.length > BILLS_PER_PAGE && (
             <Pagination
               page={billPage}
               total={filtered.length}
-              limit={BILLS_PER_PAGE}
-              dark
+              limit={billsPerPage}
               onChange={(p) => { setBillPage(p); window.scrollTo(0, 0); }}
+              onLimitChange={(l) => { setBillsPerPage(l); setBillPage(1); }}
             />
-          )}
           </>
         )}
       </div>
 
-      {/* Image preview */}
+      {/* Image preview overlay */}
       {previewImg && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
           onClick={() => setPreviewImg(null)}
         >
-          <img src={previewImg} alt="Bill" className="max-w-full max-h-full rounded-2xl" />
+          <img
+            src={previewImg}
+            alt="Bill"
+            className="max-w-full max-h-full rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
           <button
-            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-full"
-            style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff' }}
+            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition"
             onClick={() => setPreviewImg(null)}
           >
             <X className="w-5 h-5" />
@@ -297,26 +254,21 @@ export const VenueBillsPage = () => {
       {/* Reject note modal */}
       {rejectModal && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60"
           onClick={(e) => { if (e.target === e.currentTarget) setRejectModal(null); }}
         >
-          <div
-            className="w-full max-w-sm rounded-2xl p-6"
-            style={{ backgroundColor: '#1a1a1a', border: `1px solid ${T.border}` }}
-          >
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6">
             <div className="flex items-center justify-between mb-5">
-              <p className="font-bold" style={{ color: T.text }}>Reject Bill</p>
+              <p className="font-bold text-gray-900">Reject Bill</p>
               <button
                 onClick={() => setRejectModal(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-full"
-                style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: T.muted }}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <label className="text-xs font-semibold uppercase tracking-wider mb-2 block" style={{ color: T.muted }}>
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 block">
               Reason (optional)
             </label>
             <textarea
@@ -324,22 +276,19 @@ export const VenueBillsPage = () => {
               onChange={(e) => setRejectNote(e.target.value)}
               placeholder="e.g. Receipt not clear, amount mismatch…"
               rows={3}
-              className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none mb-5"
-              style={{ backgroundColor: T.lite, border: `1px solid ${T.border}`, color: T.text }}
+              className="w-full px-4 py-3 rounded-xl text-sm text-gray-900 placeholder-gray-400 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none mb-5"
             />
 
             <div className="flex gap-3">
               <button
                 onClick={() => setRejectModal(null)}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold"
-                style={{ backgroundColor: T.lite, color: T.muted }}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
               >
                 Cancel
               </button>
               <button
                 onClick={() => doVerdict(rejectModal.entryId, rejectModal.billId, 'rejected', rejectNote)}
-                className="flex-1 py-3 rounded-xl text-sm font-bold transition"
-                style={{ backgroundColor: 'rgba(239,68,68,0.9)', color: '#fff' }}
+                className="flex-1 py-3 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-700 transition"
               >
                 Confirm Reject
               </button>
