@@ -440,7 +440,7 @@ export const VenueDetailPage = () => {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-display font-bold text-white">
-              Gallery
+              Atmosphere
               {realImages.length > 0 && (
                 <span className="ml-2 text-sm font-normal" style={{ color: T.textSub }}>
                   ({realImages.length} photo{realImages.length !== 1 ? 's' : ''})
