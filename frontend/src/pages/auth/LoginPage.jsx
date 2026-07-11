@@ -109,6 +109,7 @@ export const LoginPage = () => {
             </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Kulty</h1>
             <p className="text-gray-600">Membership Made Easy</p>
+            <p className="text-yellow-500 font-bold text-sm mt-3">🎉 Party and Earn</p>
           </div>
 
           <div id="recaptcha-container" />
@@ -137,16 +138,16 @@ export const LoginPage = () => {
                 Continue with Google
               </button>
 
-              <div className="relative my-4">
+              {/* <div className="relative my-4">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-gray-200" />
                 </div>
                 <div className="relative flex justify-center text-sm">
                   <span className="px-3 bg-white text-gray-400">or continue with phone</span>
                 </div>
-              </div>
+              </div> */}
 
-              <div className="space-y-3">
+              {/* <div className="space-y-3">
                 <Input
                   type="tel"
                   placeholder="+91 XXXXXXXXXX"
@@ -162,7 +163,7 @@ export const LoginPage = () => {
                   {loading ? <Spinner size="sm" /> : <Phone className="w-5 h-5" />}
                   Send OTP
                 </button>
-              </div>
+              </div> */}
             </div>
           )}
 
