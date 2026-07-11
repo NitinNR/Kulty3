@@ -290,8 +290,8 @@ export const HomePage = () => {
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 flex-shrink-0" style={{ color: T.gold }} />
-            <span className="text-xs font-bold tracking-[0.2em] uppercase" style={{ color: T.gold }}>
-              Premium Discovery
+            <span className="text-s font-bold tracking-[0.2em]" style={{ color: T.gold }}>
+              Party and Earn
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold text-white leading-tight mb-1">

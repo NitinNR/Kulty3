@@ -133,6 +133,24 @@ export const CardPage = () => {
           <div className="flex-1 h-px" style={{ backgroundColor: T.border }} />
         </div>
 
+        {/* Guest list highlight */}
+        <div 
+          className="rounded-2xl p-5 mb-4"
+          style={{ 
+            backgroundColor: 'rgba(245,158,11,0.08)',
+            border: '1px solid rgba(245,158,11,0.25)',
+            boxShadow: '0 0 20px rgba(245,158,11,0.08)'
+          }}
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <span className="text-2xl">🎟️</span>
+            <h3 className="text-sm font-bold text-white">Guest List Access</h3>
+          </div>
+          <p className="text-sm font-bold" style={{ color: T.gold }}>
+            Get a Guest list / free entry in club till 10:30pm
+          </p>
+        </div>
+
         {/* Perks grid */}
         <div className="grid grid-cols-2 gap-4">
           {PERKS.map(({ emoji, title, desc }) => (
