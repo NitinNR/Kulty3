@@ -189,7 +189,7 @@ const Footer = () => (
     </div>
     <div className="flex items-center justify-between pt-5"
       style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-      <p className="text-xs" style={{ color: '#333' }}>© 2024 Kulty Premium Discovery. All rights reserved.</p>
+      <p className="text-xs" style={{ color: '#333' }}>© 2026 Kulty Party and Earn. All rights reserved.</p>
       <div className="flex items-center gap-2">
         {[Compass, Music, Camera, AtSign].map((Icon, i) => (
           <button key={i} className="w-8 h-8 flex items-center justify-center rounded-full transition hover:opacity-80"

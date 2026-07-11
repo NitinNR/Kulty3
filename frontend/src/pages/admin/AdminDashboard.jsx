@@ -55,7 +55,7 @@ export const AdminDashboard = () => {
       {/* Top bar */}
       <div className="bg-gray-900 text-white px-6 py-4 flex items-center justify-between shadow">
         <div>
-          <h1 className="text-xl font-bold">Kulty3 Admin</h1>
+          <h1 className="text-xl font-bold">Kulty Admin</h1>
           <p className="text-xs text-gray-400">{profile?.email}</p>
         </div>
         <button
