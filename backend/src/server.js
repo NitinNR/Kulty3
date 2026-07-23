@@ -23,12 +23,9 @@ const app = express();
 
 // Allow the deployed frontend origin + localhost in dev
 const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:4173',
-  'https://kulty3.vercel.app',
   'https://kulty.in',
   'https://www.kulty.in',
-  process.env.FRONTEND_URL,
+  ...process.env.FRONTEND_URLS?.split(',').map(url => url.trim()).filter(Boolean)
 ].filter(Boolean);
 
 app.use(cors({

@@ -108,6 +108,7 @@ export const ScannerPage = () => {
   const [venueName, setVenueName]   = useState('');
   const [venueLoading, setVenueLoading] = useState(true);
   const [errorMsg, setErrorMsg]     = useState('');
+
   const scannerRef    = useRef(null);
   const lastScannedAt = useRef(0);
   const venueIdRef    = useRef(null);
@@ -130,7 +131,7 @@ export const ScannerPage = () => {
   useEffect(() => {
     const scanner = new Html5QrcodeScanner(
       'qr-reader',
-      { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0, showTorchButtonIfSupported: true },
+      { fps: 10, qrbox: { width: 220, height: 220 }, showTorchButtonIfSupported: true },
       false
     );
 
@@ -166,7 +167,9 @@ export const ScannerPage = () => {
 
     return () => {
       if (scannerRef.current) {
-        scannerRef.current.clear().catch(() => {});
+        try {
+          scannerRef.current.clear();
+        } catch (_) {}
         scannerRef.current = null;
       }
     };
