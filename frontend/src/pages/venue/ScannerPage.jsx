@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import {
   ArrowLeft, CheckCircle, XCircle, Loader2,
-  ScanLine, Wifi, UserCheck, AlertCircle,
+  ScanLine, Wifi, UserCheck, AlertCircle, Lock,
 } from 'lucide-react';
 import { scanQREntry, getMyVenue } from '../../services/api';
 
 const SCAN_COOLDOWN_MS = 3000;
+
+function isSecureContext() {
+  return window.isSecureContext || location.protocol === 'https:';
+}
 
 // Override html5-qrcode library's injected styles to match dark theme
 const SCANNER_CSS = `
@@ -23,69 +27,20 @@ const SCANNER_CSS = `
     min-height: 260px !important;
   }
   #qr-reader__scan_region img { display: none !important; }
-  #qr-reader video { width: 100% !important; }
-
-  #qr-reader__dashboard {
-    padding: 14px 16px 10px !important;
-    background: #181818 !important;
-    border-top: 1px solid rgba(255,255,255,0.07) !important;
-  }
-  #qr-reader__dashboard_section { padding: 4px 0 !important; }
-  #qr-reader__dashboard_section_csr > span { display: none !important; }
-
-  #qr-reader__camera_permission_button,
-  #qr-reader__camera_start_button,
-  #qr-reader__camera_stop_button,
-  #qr-reader__dashboard_section_swaplink {
-    color: #f59e0b !important;
-    background: rgba(245,158,11,0.1) !important;
-    border: 1px solid rgba(245,158,11,0.3) !important;
-    border-radius: 10px !important;
-    padding: 9px 18px !important;
-    font-size: 13px !important;
-    font-weight: 600 !important;
-    cursor: pointer !important;
+  #qr-reader video {
     width: 100% !important;
-    margin: 4px 0 !important;
-    transition: background 0.2s !important;
-    letter-spacing: 0.02em !important;
+    object-fit: cover !important;
   }
-  #qr-reader__camera_permission_button:hover,
-  #qr-reader__camera_start_button:hover,
-  #qr-reader__camera_stop_button:hover {
-    background: rgba(245,158,11,0.2) !important;
+  #qr-reader__scan_region canvas {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
-
-  #qr-reader__camera_selection {
-    color: #fff !important;
-    background: #222 !important;
-    border: 1px solid rgba(255,255,255,0.15) !important;
-    border-radius: 10px !important;
-    padding: 9px 12px !important;
-    font-size: 13px !important;
-    width: 100% !important;
-    margin: 4px 0 !important;
-    outline: none !important;
-    -webkit-appearance: none !important;
-    appearance: none !important;
-    cursor: pointer !important;
-  }
-  #qr-reader__camera_selection option {
-    background: #222 !important;
-    color: #fff !important;
-  }
-
   #qr-reader__status_span {
     color: rgba(255,255,255,0.4) !important;
     font-size: 11px !important;
-  }
-  #qr-reader__dashboard_section_fsr {
-    display: none !important;
-  }
-  #qr-reader__header_message {
-    color: rgba(255,255,255,0.4) !important;
-    font-size: 11px !important;
-    padding: 4px 0 !important;
   }
 `;
 
@@ -108,6 +63,7 @@ export const ScannerPage = () => {
   const [venueName, setVenueName]   = useState('');
   const [venueLoading, setVenueLoading] = useState(true);
   const [errorMsg, setErrorMsg]     = useState('');
+  const [cameraError, setCameraError] = useState('');
 
   const scannerRef    = useRef(null);
   const lastScannedAt = useRef(0);
@@ -129,49 +85,84 @@ export const ScannerPage = () => {
   }, []);
 
   useEffect(() => {
-    const scanner = new Html5QrcodeScanner(
-      'qr-reader',
-      { fps: 10, qrbox: { width: 220, height: 220 }, showTorchButtonIfSupported: true },
-      false
-    );
+    if (!isSecureContext()) {
+      setCameraError('Camera requires HTTPS...');
+      return;
+    }
 
-    const onScanSuccess = async (decodedText) => {
-      const now = Date.now();
-      if (now - lastScannedAt.current < SCAN_COOLDOWN_MS) return;
-      lastScannedAt.current = now;
+    let cancelled = false;
 
-      const currentVenueId = venueIdRef.current;
-      if (!currentVenueId) {
-        setErrorMsg('No venue assigned to your account. Contact admin.');
-        setStatus('error');
-        setTimeout(() => { setStatus('idle'); setErrorMsg(''); }, 3500);
-        return;
-      }
+    // ✅ ADD THIS — wipe any leftover video element from the previous mount
+    const qrReaderEl = document.getElementById('qr-reader');
+    if (qrReaderEl) qrReaderEl.innerHTML = '';
 
-      try {
-        setStatus('scanning');
-        const res = await scanQREntry({ qrCodeData: decodedText, venueId: currentVenueId });
-        setResult(res.data);
-        setStatus('success');
-        setTimeout(() => { setStatus('idle'); setResult(null); }, 5000);
-      } catch (err) {
-        const msg = err.response?.data?.error || 'Scan failed. Invalid or expired QR code.';
-        setErrorMsg(msg);
-        setStatus('error');
-        setTimeout(() => { setStatus('idle'); setErrorMsg(''); }, 4000);
-      }
+    const scanner = new Html5Qrcode('qr-reader');
+    scannerRef.current = scanner;
+    const localScanner = scanner;
+
+    const config = {
+      fps: 10,
+      qrbox: { width: 220, height: 220 },
+      aspectRatio: 1.0,
     };
 
-    scanner.render(onScanSuccess, () => {});
-    scannerRef.current = scanner;
+    scanner.start(
+      { facingMode: 'environment' },
+      config,
+      async (decodedText) => {
+        const now = Date.now();
+        if (now - lastScannedAt.current < SCAN_COOLDOWN_MS) return;
+        lastScannedAt.current = now;
+
+        const currentVenueId = venueIdRef.current;
+        if (!currentVenueId) {
+          setErrorMsg('No venue assigned to your account. Contact admin.');
+          setStatus('error');
+          setTimeout(() => { setStatus('idle'); setErrorMsg(''); }, 3500);
+          return;
+        }
+
+        try {
+          setStatus('scanning');
+          const res = await scanQREntry({ qrCodeData: decodedText, venueId: currentVenueId });
+          if (cancelled) return;
+          setResult(res.data);
+          setStatus('success');
+          setTimeout(() => { if (!cancelled) { setStatus('idle'); setResult(null); } }, 5000);
+        } catch (err) {
+          const msg = err.response?.data?.error || 'Scan failed. Invalid or expired QR code.';
+          if (cancelled) return;
+          setErrorMsg(msg);
+          setStatus('error');
+          setTimeout(() => { if (!cancelled) { setStatus('idle'); setErrorMsg(''); } }, 4000);
+        }
+      },
+      () => {} // ignore scan failures (no QR in frame)
+    ).catch((err) => {
+      if (cancelled) return;
+      console.error('Camera start failed:', err);
+      if (err?.toString?.().includes('NotAllowedError') || err?.toString?.().includes('Permission')) {
+        setCameraError('Camera access denied. Please allow camera permissions in your browser settings and reload.');
+      } else if (err?.toString?.().includes('NotFoundError')) {
+        setCameraError('No camera found. Please connect a camera and reload.');
+      } else {
+        setCameraError('Unable to start camera. Please check permissions and try again.');
+      }
+    });
 
     return () => {
-      if (scannerRef.current) {
-        try {
-          scannerRef.current.clear();
-        } catch (_) {}
-        scannerRef.current = null;
-      }
+      cancelled = true;
+      scannerRef.current = null;
+      try {
+        // ✅ Only call stop() if the scanner is actually running
+        if (localScanner.isScanning) {
+          localScanner.stop().then(() => {
+            localScanner.clear();
+          }).catch(() => {});
+        } else {
+          localScanner.clear();
+        }
+      } catch (_) {}
     };
   }, []);
 
@@ -227,6 +218,27 @@ export const ScannerPage = () => {
           >
             <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" style={{ color: T.gold }} />
             <p className="text-sm" style={{ color: T.muted }}>Loading venue info…</p>
+          </div>
+        )}
+
+        {/* Camera / HTTPS error */}
+        {cameraError && (
+          <div
+            className="rounded-2xl p-5 flex items-start gap-3"
+            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}
+          >
+            <Lock className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: T.red }} />
+            <div>
+              <p className="font-semibold text-sm" style={{ color: T.red }}>Camera Unavailable</p>
+              <p className="text-xs mt-1" style={{ color: T.muted }}>{cameraError}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-3 text-xs font-semibold px-4 py-2 rounded-lg"
+                style={{ background: 'rgba(239,68,68,0.15)', color: T.red, border: '1px solid rgba(239,68,68,0.3)' }}
+              >
+                Reload Page
+              </button>
+            </div>
           </div>
         )}
 
@@ -337,6 +349,7 @@ export const ScannerPage = () => {
         )}
 
         {/* ── QR Scanner ── */}
+        {!cameraError && (
         <div
           className="rounded-2xl overflow-hidden flex-1"
           style={{
@@ -348,9 +361,10 @@ export const ScannerPage = () => {
         >
           <div id="qr-reader" className="w-full" />
         </div>
+        )}
 
         {/* Hint */}
-        {!venueLoading && venueId && status === 'idle' && (
+        {!cameraError && !venueLoading && venueId && status === 'idle' && (
           <div
             className="rounded-xl px-4 py-3 flex items-center gap-3"
             style={{ background: T.card2, border: `1px solid ${T.border}` }}
