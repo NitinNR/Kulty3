@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Venue from '../models/Venue.js';
 import { authenticateToken, optionalAuth } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 
@@ -56,7 +57,7 @@ router.get('/', optionalAuth, async (req, res) => {
 
     res.json({ events: events.map((e) => withRegInfo(e, userId)), total, page, limit });
   } catch (error) {
-    console.error('Error fetching events:', error);
+    logger.error('Error fetching events:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch events' });
   }
 });
@@ -134,7 +135,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     await event.save();
     res.status(201).json(event);
   } catch (error) {
-    console.error('Error creating event:', error);
+    logger.error('Error creating event:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to create event' });
   }
 });

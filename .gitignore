@@ -7,7 +7,7 @@ node_modules/
 /coverage
 
 # Production
-/dist
+*/dist
 /build
 *.log
 
@@ -41,3 +41,11 @@ firebase-debug.log
 
 # Razorpay
 .razorpay-test
+
+# Logs
+logs/
+backend/logs/
+*.log
+*.log.gz
+.audit.json
+*.md

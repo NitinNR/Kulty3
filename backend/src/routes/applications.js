@@ -2,6 +2,7 @@ import express from 'express';
 import User from '../models/User.js';
 import VenueApplication from '../models/VenueApplication.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ router.post('/', authenticateToken, async (req, res) => {
     await application.save();
     res.status(201).json(application);
   } catch (error) {
-    console.error('Error submitting application:', error);
+    logger.error('Error submitting application:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to submit application' });
   }
 });

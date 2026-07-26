@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Venue from '../models/Venue.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 
@@ -15,46 +16,47 @@ router.post('/scan', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'qrCodeData and venueId are required' });
     }
 
-    // Resolve the scanner's user doc
-    const scannerUser = await User.findOne({ firebaseUid: req.user.uid });
+    // Batch 1: two independent lookups in parallel
+    const [scannerUser, member] = await Promise.all([
+      User.findOne({ firebaseUid: req.user.uid }),
+      User.findOne({ qrCodeData }),
+    ]);
+
     if (!scannerUser) return res.status(401).json({ error: 'Scanner account not found' });
 
-    // Only venue owners and venue staff may scan
     if (!['venue_owner', 'venue_staff'].includes(scannerUser.role)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Verify scanner has access to this specific venue (owner OR listed as staff)
-    const scannerEmail = scannerUser.email?.toLowerCase();
-    const venue = await Venue.findOne({
-      _id: venueId,
-      $or: [
-        { ownerId: scannerUser._id },
-        { staff: scannerEmail },
-      ],
-    });
-    if (!venue) return res.status(403).json({ error: 'Venue not found or not authorized' });
-
-    // Look up member by their unique QR code data
-    const member = await User.findOne({ qrCodeData });
     if (!member) return res.status(404).json({ error: 'Member not found. QR code may be invalid.' });
 
-    // Only allow active members
     if (member.subscription?.status !== 'active') {
       return res.status(403).json({ error: 'Membership is inactive or expired' });
     }
 
-    // Prevent duplicate entries: one entry per member per venue per calendar day (UTC)
+    // Batch 2: venue access + duplicate check in parallel
+    const scannerEmail = scannerUser.email?.toLowerCase();
     const startOfDay = new Date();
     startOfDay.setUTCHours(0, 0, 0, 0);
     const endOfDay = new Date();
     endOfDay.setUTCHours(23, 59, 59, 999);
 
-    const existing = await Entry.findOne({
-      userId: member._id,
-      venueId,
-      scannedAt: { $gte: startOfDay, $lte: endOfDay },
-    });
+    const [venue, existing] = await Promise.all([
+      Venue.findOne({
+        _id: venueId,
+        $or: [
+          { ownerId: scannerUser._id },
+          { staff: scannerEmail },
+        ],
+      }),
+      Entry.findOne({
+        userId: member._id,
+        venueId,
+        scannedAt: { $gte: startOfDay, $lte: endOfDay },
+      }),
+    ]);
+
+    if (!venue) return res.status(403).json({ error: 'Venue not found or not authorized' });
 
     if (existing) {
       return res.status(200).json({
@@ -84,7 +86,7 @@ router.post('/scan', authenticateToken, async (req, res) => {
       alreadyCheckedIn: false,
     });
   } catch (error) {
-    console.error('Error scanning entry:', error);
+    logger.error('Error scanning entry:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to scan entry' });
   }
 });
@@ -106,7 +108,7 @@ router.get('/my', authenticateToken, async (req, res) => {
 
     res.json({ entries, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
-    console.error('Error fetching user entries:', error);
+    logger.error('Error fetching user entries:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
@@ -127,7 +129,7 @@ router.get('/venue/:venueId', authenticateToken, requireRole(['venue_owner', 've
 
     res.json({ entries, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
-    console.error('Error fetching venue entries:', error);
+    logger.error('Error fetching venue entries:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
@@ -155,7 +157,7 @@ router.post('/:entryId/bills', authenticateToken, async (req, res) => {
     await entry.save();
     res.status(201).json(entry);
   } catch (error) {
-    console.error('Error uploading bill:', error);
+    logger.error('Error uploading bill:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to upload bill' });
   }
 });
@@ -194,7 +196,7 @@ router.patch('/:entryId/bills/:billId', authenticateToken, requireRole(['venue_o
     await entry.save();
     res.json(entry);
   } catch (error) {
-    console.error('Error updating bill:', error);
+    logger.error('Error updating bill:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to update bill' });
   }
 });

@@ -38,4 +38,6 @@ const venueSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
+venueSchema.index({ ownerId: 1 });
+
 export default mongoose.model('Venue', venueSchema);

@@ -7,6 +7,7 @@ import VenueApplication from '../models/VenueApplication.js';
 import City from '../models/City.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.get('/stats', authenticateToken, requireRole(['admin']), async (req, res)
       totalEntries,
     });
   } catch (error) {
-    console.error('Error fetching stats:', error);
+    logger.error('Error fetching stats:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });
@@ -48,7 +49,7 @@ router.get('/users', authenticateToken, requireRole(['admin']), async (req, res)
 
     res.json({ users, total, page, limit });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    logger.error('Error fetching users:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
@@ -68,7 +69,7 @@ router.get('/entries', authenticateToken, requireRole(['admin']), async (req, re
 
     res.json({ entries, total, page, limit });
   } catch (error) {
-    console.error('Error fetching entries:', error);
+    logger.error('Error fetching entries:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
@@ -129,7 +130,7 @@ router.patch('/applications/:id/approve', authenticateToken, requireRole(['admin
 
     res.json({ message: 'Approved — user can now log in and create their venue', user, application, cityAdded });
   } catch (error) {
-    console.error('Error approving application:', error);
+    logger.error('Error approving application:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to approve application' });
   }
 });
@@ -228,7 +229,7 @@ router.get('/bills', authenticateToken, requireRole(['admin']), async (req, res)
 
     res.json({ bills: paginated, total, page: pg, limit: lim });
   } catch (error) {
-    console.error('Error fetching bills:', error);
+    logger.error('Error fetching bills:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch bills' });
   }
 });

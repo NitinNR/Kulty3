@@ -1,6 +1,7 @@
 import express from 'express';
 import User from '../models/User.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ router.post('/bootstrap-admin', authenticateToken, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found. Complete profile first.' });
     res.json({ message: 'You are now an admin', user });
   } catch (error) {
-    console.error('Bootstrap admin error:', error);
+    logger.error('Bootstrap admin error:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to set admin' });
   }
 });
@@ -55,7 +56,7 @@ router.post('/complete-profile', authenticateToken, async (req, res) => {
       user,
     });
   } catch (error) {
-    console.error('Error completing profile:', error);
+    logger.error('Error completing profile:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to complete profile' });
   }
 });

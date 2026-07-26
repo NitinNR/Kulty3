@@ -1,5 +1,6 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import logger from '../config/logger.js';
 
 let firebaseAuth = null;
 
@@ -21,7 +22,7 @@ const initFirebase = () => {
     initializeApp({
       credential: cert({ projectId, privateKey, clientEmail }),
     });
-    console.log('✓ Firebase Admin initialized for project:', projectId);
+    logger.info('Firebase Admin initialized for project:', projectId);
   }
 
   firebaseAuth = getAuth();
@@ -34,7 +35,7 @@ export const verifyIdToken = async (token) => {
     const decodedToken = await auth.verifyIdToken(token);
     return decodedToken;
   } catch (error) {
-    console.error('❌ Token verification failed:', error.message);
+    logger.error('Token verification failed:', { error: error.message, stack: error.stack });
     throw new Error('Invalid token');
   }
 };
