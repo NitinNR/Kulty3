@@ -68,6 +68,7 @@ export const ScannerPage = () => {
   const scannerRef    = useRef(null);
   const lastScannedAt = useRef(0);
   const venueIdRef    = useRef(null);
+  const processingRef = useRef(false);
   const navigate      = useNavigate();
 
   useEffect(() => {
@@ -109,33 +110,36 @@ export const ScannerPage = () => {
     scanner.start(
       { facingMode: 'environment' },
       config,
-      async (decodedText) => {
+      (decodedText) => {
+        if (processingRef.current) return;
         const now = Date.now();
         if (now - lastScannedAt.current < SCAN_COOLDOWN_MS) return;
         lastScannedAt.current = now;
+        processingRef.current = true;
 
         const currentVenueId = venueIdRef.current;
         if (!currentVenueId) {
           setErrorMsg('No venue assigned to your account. Contact admin.');
           setStatus('error');
-          setTimeout(() => { setStatus('idle'); setErrorMsg(''); }, 3500);
+          setTimeout(() => { if (!cancelled) { setStatus('idle'); setErrorMsg(''); processingRef.current = false; } }, 3500);
           return;
         }
 
-        try {
-          setStatus('scanning');
-          const res = await scanQREntry({ qrCodeData: decodedText, venueId: currentVenueId });
-          if (cancelled) return;
-          setResult(res.data);
-          setStatus('success');
-          setTimeout(() => { if (!cancelled) { setStatus('idle'); setResult(null); } }, 5000);
-        } catch (err) {
-          const msg = err.response?.data?.error || 'Scan failed. Invalid or expired QR code.';
-          if (cancelled) return;
-          setErrorMsg(msg);
-          setStatus('error');
-          setTimeout(() => { if (!cancelled) { setStatus('idle'); setErrorMsg(''); } }, 4000);
-        }
+        setStatus('scanning');
+        scanQREntry({ qrCodeData: decodedText, venueId: currentVenueId })
+          .then((res) => {
+            if (cancelled) return;
+            setResult(res.data);
+            setStatus('success');
+            setTimeout(() => { if (!cancelled) { setStatus('idle'); setResult(null); processingRef.current = false; } }, 5000);
+          })
+          .catch((err) => {
+            const msg = err.response?.data?.error || 'Scan failed. Invalid or expired QR code.';
+            if (cancelled) return;
+            setErrorMsg(msg);
+            setStatus('error');
+            setTimeout(() => { if (!cancelled) { setStatus('idle'); setErrorMsg(''); processingRef.current = false; } }, 4000);
+          });
       },
       () => {} // ignore scan failures (no QR in frame)
     ).catch((err) => {

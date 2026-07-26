@@ -25,12 +25,15 @@ const entrySchema = new mongoose.Schema({
     status: {
       type: String,
       enum: ['pending', 'processed'],
-      default: 'pending'
+      default: 'pending',
     },
     processedAt: Date,
   },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
+
+entrySchema.index({ userId: 1, venueId: 1, scannedAt: -1 });
+entrySchema.index({ venueId: 1, scannedAt: -1 });
 
 export default mongoose.model('Entry', entrySchema);
