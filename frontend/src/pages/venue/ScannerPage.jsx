@@ -10,7 +10,7 @@ import { scanQREntry, getMyVenue } from '../../services/api';
 const SCAN_COOLDOWN_MS = 3000;
 
 function isSecureContext() {
-  return window.isSecureContext || location.protocol === 'https:';
+  return window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost';
 }
 
 // Override html5-qrcode library's injected styles to match dark theme
