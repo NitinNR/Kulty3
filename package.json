@@ -1,6 +1,14 @@
 {
   "name": "kulty3",
   "version": "1.0.0",
-  "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "build": "cd frontend && npm run build",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev"
+  },
+  "overrides": {
+    "jwks-rsa": "^3.1.0",
+    "jose": "^5.9.6"
+  }
 }
