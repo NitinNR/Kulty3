@@ -1,4 +1,5 @@
 import { verifyIdToken } from '../services/firebaseAdmin.js';
+import logger from '../config/logger.js';
 
 export const authenticateToken = async (req, res, next) => {
   try {
@@ -13,7 +14,7 @@ export const authenticateToken = async (req, res, next) => {
     req.user = decodedToken;
     next();
   } catch (error) {
-    console.error('Auth error:', error);
+    logger.error('Auth error:', { error: error.message, stack: error.stack });
     res.status(401).json({ error: 'Invalid token' });
   }
 };
@@ -28,7 +29,7 @@ export const optionalAuth = async (req, res, next) => {
       req.user = decodedToken;
     }
   } catch (error) {
-    console.error('Optional auth error:', error);
+    logger.error('Optional auth error:', { error: error.message, stack: error.stack });
   }
   next();
 };

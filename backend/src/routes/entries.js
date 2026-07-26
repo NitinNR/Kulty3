@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Venue from '../models/Venue.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 
@@ -84,7 +85,7 @@ router.post('/scan', authenticateToken, async (req, res) => {
       alreadyCheckedIn: false,
     });
   } catch (error) {
-    console.error('Error scanning entry:', error);
+    logger.error('Error scanning entry:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to scan entry' });
   }
 });
@@ -106,7 +107,7 @@ router.get('/my', authenticateToken, async (req, res) => {
 
     res.json({ entries, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
-    console.error('Error fetching user entries:', error);
+    logger.error('Error fetching user entries:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
@@ -127,7 +128,7 @@ router.get('/venue/:venueId', authenticateToken, requireRole(['venue_owner', 've
 
     res.json({ entries, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
-    console.error('Error fetching venue entries:', error);
+    logger.error('Error fetching venue entries:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
@@ -155,7 +156,7 @@ router.post('/:entryId/bills', authenticateToken, async (req, res) => {
     await entry.save();
     res.status(201).json(entry);
   } catch (error) {
-    console.error('Error uploading bill:', error);
+    logger.error('Error uploading bill:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to upload bill' });
   }
 });
@@ -194,7 +195,7 @@ router.patch('/:entryId/bills/:billId', authenticateToken, requireRole(['venue_o
     await entry.save();
     res.json(entry);
   } catch (error) {
-    console.error('Error updating bill:', error);
+    logger.error('Error updating bill:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to update bill' });
   }
 });

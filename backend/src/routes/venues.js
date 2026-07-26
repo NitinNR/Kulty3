@@ -3,6 +3,7 @@ import Venue from '../models/Venue.js';
 import User from '../models/User.js';
 import { authenticateToken, optionalAuth } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ router.get('/', optionalAuth, async (req, res) => {
 
     res.json({ venues, total, page, limit });
   } catch (error) {
-    console.error('Error fetching venues:', error);
+    logger.error('Error fetching venues:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch venues' });
   }
 });
@@ -88,7 +89,7 @@ router.post('/', authenticateToken, requireRole(['admin', 'venue_owner']), async
     await venue.save();
     res.status(201).json(venue);
   } catch (error) {
-    console.error('Error creating venue:', error);
+    logger.error('Error creating venue:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to create venue' });
   }
 });

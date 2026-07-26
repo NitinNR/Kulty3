@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import logger from './logger.js';
 
 // Cached connection — reused across serverless warm invocations
 let cached = global._mongooseConn;
@@ -12,7 +13,7 @@ export const connectDB = async () => {
     cached.promise = mongoose
       .connect(process.env.MONGODB_URI)
       .then((m) => {
-        console.log(`MongoDB connected: ${m.connection.host}`);
+        logger.info(`MongoDB connected: ${m.connection.host}`);
         return m;
       });
   }
@@ -21,7 +22,7 @@ export const connectDB = async () => {
     cached.conn = await cached.promise;
   } catch (err) {
     cached.promise = null; // allow retry on next request
-    console.error('MongoDB connection error:', err);
+    logger.error('MongoDB connection error:', { error: err.message, stack: err.stack });
     throw err;
   }
 

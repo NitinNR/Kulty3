@@ -3,6 +3,7 @@ import Razorpay from 'razorpay';
 import User from '../models/User.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import crypto from 'crypto';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 
@@ -63,7 +64,7 @@ router.post('/create-order', authenticateToken, async (req, res) => {
 
     res.json({ id: order.id, amount: order.amount, currency: order.currency });
   } catch (err) {
-    console.error('create-order error:', err);
+    logger.error('create-order error:', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Failed to create order' });
   }
 });
@@ -124,7 +125,7 @@ router.post('/verify', authenticateToken, async (req, res) => {
 
     res.json({ message: 'Payment verified and subscription activated', user });
   } catch (err) {
-    console.error('verify error:', err);
+    logger.error('verify error:', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Failed to verify payment' });
   }
 });
@@ -139,7 +140,7 @@ router.post('/webhook', async (req, res) => {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
     if (!webhookSecret) {
-      console.error('RAZORPAY_WEBHOOK_SECRET not set — webhook ignored');
+      logger.error('RAZORPAY_WEBHOOK_SECRET not set — webhook ignored');
       return res.status(200).json({ status: 'ignored' });
     }
     if (!signature) {
@@ -157,7 +158,7 @@ router.post('/webhook', async (req, res) => {
     }
 
     const event = req.body;
-    console.log('Razorpay webhook event:', event.event);
+    logger.info('Razorpay webhook event:', event.event);
 
     if (event.event === 'payment.captured') {
       const payment = event.payload.payment.entity;
@@ -166,14 +167,14 @@ router.post('/webhook', async (req, res) => {
 
       // Sanity-check amount
       if (payment.amount !== PLAN_AMOUNT) {
-        console.warn(`Webhook amount mismatch: expected ${PLAN_AMOUNT}, got ${payment.amount}`);
+        logger.warn(`Webhook amount mismatch: expected ${PLAN_AMOUNT}, got ${payment.amount}`);
         return res.status(200).json({ status: 'amount_mismatch' });
       }
 
       // Find the user by the orderId stored at create-order time
       const user = await User.findOne({ 'subscription.razorpayOrderId': orderId });
       if (!user) {
-        console.warn(`Webhook: no user found for orderId ${orderId}`);
+        logger.warn(`Webhook: no user found for orderId ${orderId}`);
         return res.status(200).json({ status: 'user_not_found' });
       }
 
@@ -191,12 +192,12 @@ router.post('/webhook', async (req, res) => {
         capturedAt: payment.created_at,
       });
       await user.save();
-      console.log(`✅ Webhook activated subscription for user ${user._id}`);
+      logger.info(`Webhook activated subscription for user ${user._id}`);
     }
 
     res.status(200).json({ status: 'ok' });
   } catch (err) {
-    console.error('webhook error:', err);
+    logger.error('webhook error:', { error: err.message, stack: err.stack });
     // Always return 200 to Razorpay so it doesn't retry indefinitely
     res.status(200).json({ status: 'error', message: err.message });
   }

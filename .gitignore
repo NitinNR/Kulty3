@@ -41,4 +41,11 @@ firebase-debug.log
 
 # Razorpay
 .razorpay-test
+
+# Logs
+logs/
+backend/logs/
+*.log
+*.log.gz
+.audit.json
 *.md

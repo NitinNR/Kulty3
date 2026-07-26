@@ -1,14 +1,23 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 // Load .env for local dev; on Vercel env vars come from the dashboard
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
+// Ensure logs directory exists (not on Vercel — filesystem is read-only there)
+const logsDir = path.resolve(__dirname, '../logs');
+if (!process.env.VERCEL && !fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+
 import express from 'express';
 import cors from 'cors';
 import { connectDB } from './config/db.js';
+import logger from './config/logger.js';
+import { requestLogger } from './middleware/requestLogger.js';
 import authRoutes         from './routes/auth.js';
 import usersRoutes        from './routes/users.js';
 import venuesRoutes       from './routes/venues.js';
@@ -25,16 +34,21 @@ const app = express();
 const allowedOrigins = [
   'https://kulty.in',
   'https://www.kulty.in',
+  process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`,
+  process.env.FRONTEND_URL && process.env.FRONTEND_URL,
   ...process.env.FRONTEND_URLS?.split(',').map(url => url.trim()).filter(Boolean)
 ].filter(Boolean);
 
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    cb(new Error(`CORS: ${origin} not allowed`));
+    cb(new Error(`CORS: ${origin} not allowed. Allowed: ${allowedOrigins.join(', ')}`));
   },
   credentials: true,
 }));
+
+// Access logging — runs before body parsing to capture every request
+app.use(requestLogger);
 
 // Capture raw body for Razorpay webhook signature verification
 app.use(express.json({
@@ -48,7 +62,7 @@ app.use(async (req, res, next) => {
     await connectDB();
     next();
   } catch (err) {
-    console.error('DB connection failed:', err);
+    logger.error('DB connection failed', { error: err.message, stack: err.stack });
     res.status(503).json({ error: 'Service temporarily unavailable' });
   }
 });
@@ -66,16 +80,22 @@ app.use('/api/cities',       citiesRoutes);
 app.get('/health', (_req, res) => res.json({ status: 'OK' }));
 
 app.use((err, _req, res, _next) => {
-  console.error(err);
-  res.status(500).json({ error: 'Internal server error' });
+  const isCors = err.message?.startsWith('CORS:');
+  const status = isCors ? 403 : 500;
+  logger.error(`${err.message || 'Unhandled error'}`, {
+    status,
+    stack: err.stack,
+    isCors,
+  });
+  res.status(status).json({ error: isCors ? err.message : 'Internal server error' });
 });
 
 // Local development only — Vercel invokes the exported app directly
 if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
-    console.log(`\n🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📚 API at http://localhost:${PORT}/api\n`);
+    logger.info(`Server running on http://localhost:${PORT}`);
+    logger.info(`API at http://localhost:${PORT}/api`);
   });
 }
 

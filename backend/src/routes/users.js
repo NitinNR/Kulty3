@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import Venue from '../models/Venue.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 
     res.json(user);
   } catch (error) {
-    console.error('Error fetching user:', error);
+    logger.error('Error fetching user:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
@@ -44,7 +45,7 @@ router.patch('/me', authenticateToken, async (req, res) => {
     );
     res.json(user);
   } catch (error) {
-    console.error('Error updating user:', error);
+    logger.error('Error updating user:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to update user' });
   }
 });
@@ -126,7 +127,7 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
 
     res.json({ users, total, page, limit });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    logger.error('Error fetching users:', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
