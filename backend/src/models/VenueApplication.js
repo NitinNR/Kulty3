@@ -5,7 +5,7 @@ const venueApplicationSchema = new mongoose.Schema({
   businessName: { type: String, required: true },
   category: {
     type: String,
-    enum: ['restaurant', 'club', 'spa', 'cafe', 'lounge', 'bar', 'other'],
+    enum: ['restaurant', 'club', 'cafe'],
     default: 'other',
   },
   description: String,

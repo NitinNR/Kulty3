@@ -204,6 +204,111 @@ const Footer = () => (
 
 const VENUE_LIMIT = 12;
 
+// ── Hero Section ─────────────────────────────────────────────────────────────
+const HeroSection = ({ venues, events }) => {
+  const [videoLoaded, setVideoLoaded] = useState(false);
+
+  return (
+    <div className="relative w-full overflow-hidden rounded-2xl md:rounded-3xl mb-8"
+      style={{ minHeight: '420px', maxHeight: '560px' }}>
+
+      {/* ── Video Background ── */}
+      <div className="absolute inset-0">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          onLoadedData={() => setVideoLoaded(true)}
+          poster="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1920&q=80"
+          className="w-full h-full object-cover transition-opacity duration-1000"
+          style={{ opacity: videoLoaded ? 1 : 0 }}
+        >
+          <source src="https://videos.pexels.com/video-files/3129671/3129671-uhd_2560_1440_30fps.mp4" type="video/mp4" />
+        </video>
+
+        {/* Fallback poster while video loads */}
+        {!videoLoaded && (
+          <div className="absolute inset-0 bg-cover bg-center"
+            style={{
+              backgroundImage: 'url(https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1920&q=80)',
+            }}
+          />
+        )}
+      </div>
+
+      {/* ── Gradient Overlays ── */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/20" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent to-transparent" />
+
+      {/* ── Content ── */}
+      <div className="relative z-10 flex flex-col justify-end h-full p-6 sm:p-8 md:p-10"
+        style={{ minHeight: '420px' }}>
+
+        {/* Animated badge */}
+        <div className="flex items-center gap-2 mb-4 animate-fade-in">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full"
+            style={{ backgroundColor: 'rgba(245,158,11,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(245,158,11,0.25)' }}>
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: T.gold }} />
+              <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: T.gold }} />
+            </span>
+            <span className="text-xs font-bold tracking-wider" style={{ color: T.gold }}>LIVE NOW</span>
+          </div>
+        </div>
+
+        {/* Headline */}
+        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-display font-bold text-white leading-[1.1] mb-3 max-w-2xl">
+          Party{' '} & {' '}
+          <span className="bg-clip-text text-transparent bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400">
+            Earn
+          </span>{' '}
+          {/* Repeat. */}
+        </h1>
+
+        {/* Tagline */}
+        <p className="text-sm sm:text-base md:text-lg max-w-lg mb-6 leading-relaxed"
+          style={{ color: 'rgba(255,255,255,0.7)' }}>
+          Unlock exclusive cashback at India's finest clubs, restaurants, and cafes. Your nightlife just got rewarding.
+        </p>
+
+        {/* Stats row */}
+        <div className="flex items-center gap-6 sm:gap-8 mb-6">
+          {[
+            { value: venues?.length > 0 ? `${venues.length}+` : '50+', label: 'Venues' },
+            { value: events?.length > 0 ? `${events.length}+` : '100+', label: 'Events' },
+            { value: '10%', label: 'Max Cashback' },
+          ].map(({ value, label }) => (
+            <div key={label}>
+              <p className="text-lg sm:text-xl font-bold text-white">{value}</p>
+              <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* CTA Buttons */}
+        <div className="flex flex-wrap gap-3">
+          <button className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:scale-[1.03] hover:shadow-lg hover:shadow-amber-500/20"
+            style={{ backgroundColor: T.gold, color: '#000' }}>
+            <Sparkles className="w-4 h-4" />
+            Start Earning
+          </button>
+          <button className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:bg-white/10"
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.08)',
+              color: '#fff',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255,255,255,0.12)',
+            }}>
+            Explore Venues
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export const HomePage = () => {
   const [venues,      setVenues]      = useState([]);
@@ -286,37 +391,8 @@ export const HomePage = () => {
 
       <div className="max-w-7xl mx-auto px-4 md:px-6 pt-6 md:pt-10">
 
-        {/* ── Discovery header ─────────────────────────────── */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 flex-shrink-0" style={{ color: T.gold }} />
-            <span className="text-s font-bold tracking-[0.2em]" style={{ color: T.gold }}>
-              Party and Earn
-            </span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold text-white leading-tight mb-1">
-            Discover Exclusive Venues
-          </h1>
-          <p className="text-sm md:text-base" style={{ color: T.sub }}>
-            Curated experiences for Kulty members across India
-          </p>
-        </div>
-
-        {/* ── Stats strip ──────────────────────────────────── */}
-        {!loading && venues.length > 0 && (
-          <div className="flex items-center gap-4 md:gap-6 mb-6 overflow-x-auto no-scrollbar pb-1">
-            {[
-              { label: 'Partner Venues',  value: venues.length + '+' },
-              { label: 'Upcoming Events', value: events.length > 0 ? events.length + '+' : '—' },
-              { label: 'Cities',          value: [...new Set(venues.map((v) => v.city).filter(Boolean))].length + '+' },
-            ].map(({ label, value }) => (
-              <div key={label} className="flex items-center gap-2 flex-shrink-0">
-                <p className="text-base font-bold text-white">{value}</p>
-                <p className="text-xs" style={{ color: T.dim }}>{label}</p>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* ── Hero Section ─────────────────────────────────── */}
+        <HeroSection venues={venues} events={events} />
 
         {/* ── Search bar ───────────────────────────────────── */}
         <div className="relative mb-5"
