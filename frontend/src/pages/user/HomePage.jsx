@@ -7,7 +7,7 @@ import {
 import { getVenues, getEvents, getCities } from '../../services/api';
 import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const T = {
   bg:       '#0d0d0d',
@@ -306,9 +306,21 @@ export const HomePage = () => {
   const [city,        setCity]        = useState('');
   const [cityOpen,    setCityOpen]    = useState(false);
   const [cityList,    setCityList]    = useState(DEFAULT_CITIES);
-  const sentinelRef = useRef(null);
-  const cityRef     = useRef(null);
+  const sentinelRef    = useRef(null);
+  const cityRef        = useRef(null);
+  const searchInputRef = useRef(null);
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q != null) {
+      setSearch(q);
+      if (searchParams.get('focus')) {
+        setTimeout(() => searchInputRef.current?.focus(), 350);
+      }
+    }
+  }, [searchParams]);
 
   const fetchVenues = useCallback(async (pg, append = false) => {
     if (pg === 1) setLoading(true); else setLoadingMore(true);
@@ -384,6 +396,7 @@ export const HomePage = () => {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
             style={{ color: T.dim }} />
           <input
+            ref={searchInputRef}
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
