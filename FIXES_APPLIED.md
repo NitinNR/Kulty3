@@ -1,5 +1,63 @@
 # 🔧 Fixes Applied
 
+## Homepage Navbar — Working Top Search
+
+### Issue
+The search icon in the top navbar did nothing useful — it just navigated to `/home` without any search UI or results.
+
+### Fix Applied
+
+**File:** `frontend/src/components/layout/Navbar.jsx`
+1. Search icon (now visible on mobile **and** desktop) toggles an in-navbar search panel that auto-focuses.
+2. Typing queries the API (debounced 350ms) via `getVenues` + `getEvents` in parallel.
+3. Dropdown shows live **VENUES** and **EVENTS** results (with thumbnails) — clicking navigates to the detail page.
+4. Shows a "No results" state and a "See all results" action.
+5. **Enter** navigates to `/home?q=<query>&focus=1`; **Esc** or click-outside closes the panel; the panel closes on route change.
+
+**File:** `frontend/src/pages/user/HomePage.jsx`
+1. Reads the `?q=` URL param on mount via `useSearchParams` and applies it to the existing home search bar (which already filters venues).
+2. With `focus=1`, it scrolls to and focuses the home search input.
+
+### Build Status
+✅ **Build Successful!**
+
+---
+
+## Homepage Hero — Video Replaced with 4K Image
+
+### Issue
+The homepage hero section played a remote video file (`3129671-uhd_2560_1440_30fps.mp4` from Pexels), causing slow load times, heavy bandwidth usage, and autoplay quirks on mobile.
+
+### Fix Applied
+
+**File:** `frontend/src/pages/user/HomePage.jsx`
+
+1. **Removed the `<video>` element** (autoPlay/loop/muted/playsInline) from `HeroSection`.
+2. **Replaced with a static 4K image** — a party & gathering vibe photo from Unsplash at 4K resolution (`?w=3840&q=80`).
+3. **Removed the loading-state fallback poster logic** (`videoLoaded` state + poster div) since a static image needs no pre-load fade.
+4. Added `loading="eager"` and `fetchpriority="high"` so the hero renders immediately.
+
+### Key Changes
+```diff
+- const [videoLoaded, setVideoLoaded] = useState(false);
+- <video autoPlay loop muted playsInline onLoadedData={...} poster="...">
+-   <source src="https://videos.pexels.com/video-files/3129671/...mp4" type="video/mp4" />
+- </video>
+- {!videoLoaded && ( <div ... poster background ... /> )}
++ <img
++   src="/assets/hero-party.jpg"
++   alt="Party and gathering"
++   className="w-full h-full object-cover"
++   loading="eager"
++   fetchpriority="high"
++ />
+```
+
+### Build Status
+✅ **Build Successful!**
+
+---
+
 ## Tailwind CSS v4 PostCSS Configuration
 
 ### Issue
