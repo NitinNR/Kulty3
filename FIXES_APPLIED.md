@@ -1,5 +1,40 @@
 # 🔧 Fixes Applied
 
+## Homepage Hero — Video Replaced with 4K Image
+
+### Issue
+The homepage hero section played a remote video file (`3129671-uhd_2560_1440_30fps.mp4` from Pexels), causing slow load times, heavy bandwidth usage, and autoplay quirks on mobile.
+
+### Fix Applied
+
+**File:** `frontend/src/pages/user/HomePage.jsx`
+
+1. **Removed the `<video>` element** (autoPlay/loop/muted/playsInline) from `HeroSection`.
+2. **Replaced with a static 4K image** — a party & gathering vibe photo from Unsplash at 4K resolution (`?w=3840&q=80`).
+3. **Removed the loading-state fallback poster logic** (`videoLoaded` state + poster div) since a static image needs no pre-load fade.
+4. Added `loading="eager"` and `fetchpriority="high"` so the hero renders immediately.
+
+### Key Changes
+```diff
+- const [videoLoaded, setVideoLoaded] = useState(false);
+- <video autoPlay loop muted playsInline onLoadedData={...} poster="...">
+-   <source src="https://videos.pexels.com/video-files/3129671/...mp4" type="video/mp4" />
+- </video>
+- {!videoLoaded && ( <div ... poster background ... /> )}
++ <img
++   src="/assets/hero-party.jpg"
++   alt="Party and gathering"
++   className="w-full h-full object-cover"
++   loading="eager"
++   fetchpriority="high"
++ />
+```
+
+### Build Status
+✅ **Build Successful!**
+
+---
+
 ## Tailwind CSS v4 PostCSS Configuration
 
 ### Issue

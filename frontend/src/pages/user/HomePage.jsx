@@ -206,40 +206,24 @@ const VENUE_LIMIT = 12;
 
 // ── Hero Section ─────────────────────────────────────────────────────────────
 const HeroSection = ({ venues, events }) => {
-  const [videoLoaded, setVideoLoaded] = useState(false);
-
   return (
     <div className="relative w-full overflow-hidden rounded-2xl md:rounded-3xl mb-8"
       style={{ minHeight: '420px', maxHeight: '560px' }}>
 
-      {/* ── Video Background ── */}
+      {/* ── Image Background (4K party & gathering) ── */}
       <div className="absolute inset-0">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          onLoadedData={() => setVideoLoaded(true)}
-          poster="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1920&q=80"
-          className="w-full h-full object-cover transition-opacity duration-1000"
-          style={{ opacity: videoLoaded ? 1 : 0 }}
-        >
-          <source src="https://videos.pexels.com/video-files/3129671/3129671-uhd_2560_1440_30fps.mp4" type="video/mp4" />
-        </video>
-
-        {/* Fallback poster while video loads */}
-        {!videoLoaded && (
-          <div className="absolute inset-0 bg-cover bg-center"
-            style={{
-              backgroundImage: 'url(https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1920&q=80)',
-            }}
-          />
-        )}
+        <img
+          src="/assets/kulty_club.png"
+          alt="Party and gathering"
+          className="w-full h-full object-cover"
+          loading="eager"
+          fetchpriority="high"
+        />
       </div>
 
       {/* ── Gradient Overlays ── */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/20" />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-transparent" />
 
       {/* ── Content ── */}
       <div className="relative z-10 flex flex-col justify-end h-full p-6 sm:p-8 md:p-10"
