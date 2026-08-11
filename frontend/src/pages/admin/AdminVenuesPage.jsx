@@ -5,7 +5,7 @@ import { getAdminVenues, createVenue, updateVenue, deleteVenue, getAllUsers } fr
 import { Spinner } from '../../components/common/Spinner';
 import { Pagination } from '../../components/common/Pagination';
 
-const CATEGORIES = ['restaurant', 'club', 'spa', 'cafe', 'lounge', 'bar', 'other'];
+const CATEGORIES = ['restaurant', 'club', 'cafe'];
 
 const EMPTY_FORM = {
   name: '', description: '', category: 'restaurant', address: '', city: '',

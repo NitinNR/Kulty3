@@ -98,7 +98,7 @@ export const PaymentPage = () => {
         style={{ borderBottom: `1px solid ${T.border}`, background: T.card }}
       >
         <button
-          onClick={() => navigate('/choose-path')}
+          onClick={() => navigate('/home')}
           className="rounded-xl p-2 transition-colors"
           style={{ background: 'rgba(255,255,255,0.06)', color: T.sub }}
         >

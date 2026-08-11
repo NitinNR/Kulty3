@@ -5,7 +5,7 @@ import { getMyVenue, createVenue, getMyApplication } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import { Spinner } from '../../components/common/Spinner';
 
-const CATEGORIES = ['restaurant', 'club', 'spa', 'cafe', 'lounge', 'bar', 'other'];
+const CATEGORIES = ['restaurant', 'club', 'cafe'];
 
 // Shown when venue_owner has no venue yet — inline first-time setup
 const VenueSetupForm = ({ prefill, onCreated }) => {

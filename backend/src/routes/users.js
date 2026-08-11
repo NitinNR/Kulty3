@@ -1,6 +1,7 @@
 import express from 'express';
 import User from '../models/User.js';
 import Venue from '../models/Venue.js';
+import VenueApplication from '../models/VenueApplication.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import logger from '../config/logger.js';
@@ -18,6 +19,16 @@ router.get('/me', authenticateToken, async (req, res) => {
         phone: req.user.phone_number,
       });
       await user.save();
+    }
+
+    // Self-heal: a user tagged as venue owner who has a completed profile but
+    // never actually submitted an application is treated as a regular member.
+    if (user.intentRole === 'venue_owner' && user.name) {
+      const application = await VenueApplication.findOne({ userId: user._id });
+      if (!application) {
+        user.intentRole = null;
+        await user.save();
+      }
     }
 
     // Auto-promote to venue_staff if email is in any venue's staff list
