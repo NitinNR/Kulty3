@@ -8,7 +8,7 @@ import { useAuth } from './hooks/useAuth';
 // Auth
 import { LoginPage } from './pages/auth/LoginPage';
 import { CompleteProfilePage } from './pages/auth/CompleteProfilePage';
-import { ChoosePathPage } from './pages/auth/ChoosePathPage';
+import { PartnerLoginPage } from './pages/auth/PartnerLoginPage';
 import { ApplyVenueOwnerPage } from './pages/auth/ApplyVenueOwnerPage';
 
 // Payment
@@ -52,7 +52,6 @@ const RootRedirect = () => {
   if (profile.role === 'admin') return <Navigate to="/admin" replace />;
   if (profile.role === 'venue_owner' || profile.role === 'venue_staff') return <Navigate to="/venue" replace />;
   if (!profile.name) return <Navigate to="/complete-profile" replace />;
-  if (!profile.intentRole) return <Navigate to="/choose-path" replace />;
   if (profile.intentRole === 'venue_owner') return <Navigate to="/apply-venue" replace />;
   return <Navigate to="/home" replace />;
 };
@@ -65,10 +64,10 @@ export default function App() {
           <Routes>
             {/* Public */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/partner" element={<PartnerLoginPage />} />
 
             {/* Onboarding */}
             <Route path="/complete-profile" element={<ProtectedRoute><CompleteProfilePage /></ProtectedRoute>} />
-            <Route path="/choose-path" element={<ProtectedRoute><ChoosePathPage /></ProtectedRoute>} />
             <Route path="/apply-venue" element={<ProtectedRoute><ApplyVenueOwnerPage /></ProtectedRoute>} />
             <Route path="/payment" element={<ProtectedRoute><PaymentPage /></ProtectedRoute>} />
             <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccessPage /></ProtectedRoute>} />

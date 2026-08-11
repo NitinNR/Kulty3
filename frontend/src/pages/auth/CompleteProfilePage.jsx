@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, User } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { completeProfile } from '../../services/api';
@@ -34,6 +34,8 @@ export const CompleteProfilePage = () => {
   const [photoBase64,  setPhotoBase64]  = useState('');
   const photoInputRef = useRef(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const next = searchParams.get('next') || '/payment';
   const { register, handleSubmit, formState: { errors } } = useForm();
 
   const handlePhotoChange = (e) => {
@@ -57,7 +59,7 @@ export const CompleteProfilePage = () => {
         dob:  data.dob,
         profilePhoto: photoBase64 || '',
       });
-      navigate('/choose-path', { replace: true });
+      navigate(next, { replace: true });
     } catch (err) {
       setError('Failed to complete profile. Please try again.');
       console.error(err);

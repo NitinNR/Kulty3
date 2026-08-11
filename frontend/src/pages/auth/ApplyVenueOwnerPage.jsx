@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, CheckCircle, Clock, XCircle, ArrowLeft } from 'lucide-react';
+import { Building2, CheckCircle, Clock, XCircle, ArrowLeft, LogOut } from 'lucide-react';
 import { submitApplication, getMyApplication } from '../../services/api';
 import { Spinner } from '../../components/common/Spinner';
+import { useAuth } from '../../hooks/useAuth';
 
-const CATEGORIES = ['restaurant', 'club', 'spa', 'cafe', 'lounge', 'bar', 'other'];
+const CATEGORIES = ['restaurant', 'club', 'cafe'];
 
 const EMPTY = {
   businessName: '', category: 'restaurant', description: '',
@@ -18,6 +19,16 @@ export const ApplyVenueOwnerPage = () => {
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/partner', { replace: true });
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     getMyApplication()
@@ -124,6 +135,13 @@ export const ApplyVenueOwnerPage = () => {
               Please check back later or contact support if you have questions.
             </p>
           )}
+
+          <button
+            onClick={handleLogout}
+            className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-400 hover:text-gray-700 transition"
+          >
+            <LogOut className="w-4 h-4" /> Sign out
+          </button>
         </div>
       </div>
     );
@@ -132,12 +150,20 @@ export const ApplyVenueOwnerPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-xl mx-auto px-4 py-10">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back
-        </button>
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 transition"
+          >
+            <LogOut className="w-4 h-4" /> Sign out
+          </button>
+        </div>
 
         <div className="bg-white rounded-2xl shadow-sm p-8">
           <div className="flex items-center gap-3 mb-6">
@@ -245,7 +271,7 @@ export const ApplyVenueOwnerPage = () => {
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 disabled:opacity-50 transition"
+              className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 disabled:opacity-50 transition flex items-center justify-center gap-2"
             >
               {submitting ? <Spinner size="sm" /> : 'Submit Application'}
             </button>

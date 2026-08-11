@@ -8,7 +8,7 @@ import { getMyVenue, updateVenue, addVenueStaff, removeVenueStaff } from '../../
 import { useAuth } from '../../hooks/useAuth';
 import { Spinner } from '../../components/common/Spinner';
 
-const CATEGORIES = ['restaurant', 'club', 'spa', 'cafe', 'lounge', 'bar', 'other'];
+const CATEGORIES = ['restaurant', 'club', 'cafe'];
 const MAX_PHOTOS = 5;
 
 // Compress a File to a base64 JPEG (max 1200px, 80% quality)

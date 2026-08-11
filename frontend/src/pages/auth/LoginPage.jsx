@@ -30,14 +30,13 @@ export const LoginPage = () => {
     } else if (!profile.name) {
       navigate('/complete-profile', { replace: true });
     } else if (profile.subscription?.status === 'active') {
-      // Already a subscribed member — skip path selection
+      // Already a subscribed member — go straight to the app
       navigate('/home', { replace: true });
-    } else if (!profile.intentRole) {
-      // New user who hasn't chosen their path yet
-      navigate('/choose-path', { replace: true });
     } else if (profile.intentRole === 'venue_owner') {
+      // Existing venue applicants (backward compat) stay on the venue flow
       navigate('/apply-venue', { replace: true });
     } else {
+      // New users are members by default — proceed to subscription payment
       navigate('/payment', { replace: true });
     }
   }, [isAuthenticated, authLoading, profile, navigate]);

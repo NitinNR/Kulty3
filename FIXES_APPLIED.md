@@ -1,5 +1,110 @@
 # 🔧 Fixes Applied
 
+## Venue Owner Flow — Existing Members No Longer Tagged as Venue Owners
+
+### Issue
+A normal member who visited `/partner` once was auto-tagged with `intentRole='venue_owner'`. After that, even after signing out and back in with the same (member) Google account, they were still redirected to the venue application form.
+
+### Root Cause
+`PartnerLoginPage` tagged **every** fresh sign-in on `/partner` as a venue owner, without checking whether the account was already a registered member. Once tagged, `LoginPage`/`RootRedirect` kept routing the user to `/apply-venue`.
+
+### Fix Applied
+
+**File:** `frontend/src/pages/auth/PartnerLoginPage.jsx`
+- Fresh sign-ins are now decided by account state:
+  - `admin` → `/admin`, `venue_owner`/`venue_staff` → `/venue`.
+  - `intentRole === 'venue_owner'` (already a real applicant) → venue flow.
+  - **Brand-new account (no name yet)** → tagged as venue owner → `/complete-profile?next=/apply-venue`.
+  - **Existing registered account (member)** → NOT tagged; shows an "Account already registered" screen with **Sign out & try another account** and **Go to my member account**.
+- Kept the sign-out gate for users already logged in when opening `/partner`.
+
+**File:** `backend/src/routes/users.js` (`GET /users/me`)
+- Self-heal: if a user has `intentRole='venue_owner'` and a completed profile (`name`) but **no venue application exists**, `intentRole` is reset to `null` — so previously-wrongly-tagged members automatically return to the normal member flow on their next profile fetch.
+
+### Flow after fix (step by step)
+1. Member logs in → visits `/partner` → **sign-out gate** shown.
+2. Member signs out → `/partner` shows the Google sign-in form.
+3. Member signs in again with the same member Google account → profile shows an **existing registered account** → "Account already registered" screen → goes to member account (NOT the venue form).
+4. A **new/unregistered Google account** signs in on `/partner` → venue owner onboarding form.
+
+### Build Status
+✅ **Frontend build successful · Backend syntax check passed**
+
+---
+
+## Apply Venue — Logout Button on Status/Form Pages
+
+### Issue
+On the "Application Under Review" (and other application status) page, venue owners had no way to sign out.
+
+### Fix Applied
+
+**File:** `frontend/src/pages/auth/ApplyVenueOwnerPage.jsx`
+1. Added a **Sign out** button on the application status view (under review / approved / rejected) that logs out and returns to `/partner`.
+2. Also added a **Sign out** link in the top-right of the application form view (next to the Back button).
+
+### Build Status
+✅ **Build Successful!**
+
+---
+
+## Apply Venue — Submit Button Loader Centering + Partner Sign-out Gate
+
+### Issue 1
+The "Submit Application" loader (Spinner) in `ApplyVenueOwnerPage` was not centered inside the button.
+
+### Fix Applied
+
+**File:** `frontend/src/pages/auth/ApplyVenueOwnerPage.jsx`
+Added `flex items-center justify-center gap-2` to the submit button so the spinner is centered.
+
+### Issue 2
+A normal user who was already logged in and visited `/partner` was silently auto-redirected, instead of being asked to sign out so they could sign in again with their venue-owner Google account.
+
+### Fix Applied
+
+**File:** `frontend/src/pages/auth/PartnerLoginPage.jsx`
+1. Tracks `wasAuthedOnMount` — if the user was already signed in when opening `/partner`, a **sign-out gate** is shown: "You're currently signed in as … — please sign out first" with a **Sign out & continue as venue owner** button and a **Go to my account** button.
+2. After signing out, the Google sign-in form is shown. A fresh sign-in on this page proceeds to the venue flow (`/complete-profile?next=/apply-venue` → `/apply-venue`, or straight to `/apply-venue`).
+
+### Build Status
+✅ **Build Successful!**
+
+---
+
+## Onboarding — Separated Member vs Venue Owner Flows
+
+### Issue
+After Google login, new users were shown a two-option "How would you like to join?" screen (`/choose-path`) to pick Member vs Venue Owner. The requirement: default Google login should always treat the user as a **normal member** (no selection), and venue owners should have a **separate, hidden route** with their own Google auth → venue onboarding.
+
+### Changes
+
+**New file:** `frontend/src/pages/auth/PartnerLoginPage.jsx`
+- Standalone `/partner` route (not linked from normal-user UI).
+- Own "Continue with Google as Venue Owner" sign-in.
+- After auth, redirects: admin → `/admin`, approved owner/staff → `/venue`, new user → `/complete-profile?next=/apply-venue`, otherwise → `/apply-venue`.
+- Sets `intentRole: 'venue_owner'` (via `updateProfile`) so the user stays on the venue flow across sessions.
+
+**`frontend/src/App.jsx`**
+- Added `/partner` route; removed `/choose-path` route and its import.
+- `RootRedirect` no longer sends users to `/choose-path`; keeps venue applicants on `/apply-venue`.
+
+**`frontend/src/pages/auth/LoginPage.jsx`**
+- Removed the `!intentRole → /choose-path` redirect. Default login is now: admin → `/admin`, venue_owner → `/venue`, new user → `/complete-profile` → `/payment`, subscribed member → `/home`.
+
+**`frontend/src/pages/auth/CompleteProfilePage.jsx`**
+- After saving, navigates to `?next=` param if present, else `/payment` (normal member flow).
+
+**`frontend/src/pages/payment/PaymentPage.jsx`**
+- Back arrow now goes to `/home` instead of the removed `/choose-path`.
+
+**Deleted:** `frontend/src/pages/auth/ChoosePathPage.jsx`.
+
+### Build Status
+✅ **Build Successful!**
+
+---
+
 ## Homepage Navbar — Working Top Search
 
 ### Issue
