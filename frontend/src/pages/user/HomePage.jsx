@@ -205,7 +205,7 @@ const Footer = () => (
 const VENUE_LIMIT = 12;
 
 // ── Hero Section ─────────────────────────────────────────────────────────────
-const HeroSection = ({ venues, events }) => {
+const HeroSection = ({ venues, events, onStartEarning, onExploreVenues }) => {
   return (
     <div className="relative w-full overflow-hidden rounded-2xl md:rounded-3xl mb-8"
       style={{ minHeight: '420px', maxHeight: '560px' }}>
@@ -272,12 +272,14 @@ const HeroSection = ({ venues, events }) => {
 
         {/* CTA Buttons */}
         <div className="flex flex-wrap gap-3">
-          <button className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:scale-[1.03] hover:shadow-lg hover:shadow-amber-500/20"
+          <button onClick={onStartEarning}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:scale-[1.03] hover:shadow-lg hover:shadow-amber-500/20"
             style={{ backgroundColor: T.gold, color: '#000' }}>
             <Sparkles className="w-4 h-4" />
             Start Earning
           </button>
-          <button className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:bg-white/10"
+          <button onClick={onExploreVenues}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:bg-white/10"
             style={{
               backgroundColor: 'rgba(255,255,255,0.08)',
               color: '#fff',
@@ -309,6 +311,7 @@ export const HomePage = () => {
   const sentinelRef    = useRef(null);
   const cityRef        = useRef(null);
   const searchInputRef = useRef(null);
+  const venuesRef      = useRef(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -388,7 +391,12 @@ export const HomePage = () => {
       <div className="max-w-7xl mx-auto px-4 md:px-6 pt-6 md:pt-10">
 
         {/* ── Hero Section ─────────────────────────────────── */}
-        <HeroSection venues={venues} events={events} />
+        <HeroSection
+          venues={venues}
+          events={events}
+          onStartEarning={() => navigate('/card')}
+          onExploreVenues={() => venuesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        />
 
         {/* ── Search bar ───────────────────────────────────── */}
         <div className="relative mb-5"
@@ -471,7 +479,7 @@ export const HomePage = () => {
         </div>
 
         {/* ── Venues section ───────────────────────────────── */}
-        <div className="flex items-end justify-between mb-4">
+        <div ref={venuesRef} className="scroll-mt-4 flex items-end justify-between mb-4">
           <div>
             <h2 className="text-xl font-display font-bold text-white">
               {search
