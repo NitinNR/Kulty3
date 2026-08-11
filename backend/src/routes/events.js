@@ -9,6 +9,21 @@ import logger from '../config/logger.js';
 const router = express.Router();
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+const startOfToday = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+// Derive the true status from the event date, so stale stored statuses
+// (e.g. `upcoming`) can never keep a past event looking upcoming.
+const effectiveStatus = (event) => {
+  const stored = event.status || 'upcoming';
+  if (!event.date) return stored;
+  if (event.date < startOfToday()) return 'past';
+  return stored;
+};
+
 const withRegInfo = (event, userId) => {
   const obj = event.toObject ? event.toObject() : { ...event };
   const registrationCount = obj.registrations?.length || 0;
@@ -17,6 +32,7 @@ const withRegInfo = (event, userId) => {
     : false;
   // Strip full registrations list from public response
   delete obj.registrations;
+  obj.status = effectiveStatus(event);
   return { ...obj, registrationCount, isRegistered };
 };
 
@@ -25,8 +41,34 @@ router.get('/', optionalAuth, async (req, res) => {
   try {
     const { venueId, status, search, page = 1, limit = 20 } = req.query;
     const filter = {};
+    const conds = [];
     if (venueId) filter.venueId = venueId;
-    if (status)  filter.status  = status;
+
+    // Self-heal: any event whose date has passed is marked past in the DB.
+    // Fire-and-forget — the query conditions below already self-correct.
+    Event.updateMany(
+      { date: { $lt: startOfToday() }, status: { $ne: 'past' } },
+      { $set: { status: 'past' } }
+    ).catch(() => {});
+
+    if (status) {
+      if (status === 'upcoming') {
+        conds.push({
+          $or: [
+            { date: { $gte: startOfToday() } },
+            { date: null },
+            { date: { $exists: false } },
+          ],
+        });
+        conds.push({ status: { $ne: 'past' } });
+      } else if (status === 'past') {
+        conds.push({
+          $or: [{ date: { $lt: startOfToday() } }, { status: 'past' }],
+        });
+      } else {
+        filter.status = status; // 'ongoing'
+      }
+    }
 
     if (search) {
       const re = new RegExp(search, 'i');
@@ -34,10 +76,19 @@ router.get('/', optionalAuth, async (req, res) => {
         $or: [{ name: re }, { city: re }],
       }).select('_id');
       const vids = matchingVenues.map((v) => v._id);
-      filter.$or = [
+      conds.push([
         { title: re },
         ...(vids.length ? [{ venueId: { $in: vids } }] : []),
-      ];
+      ]);
+    }
+
+    if (conds.length) {
+      if (conds.length === 1 && Array.isArray(conds[0])) {
+        filter.$or = conds[0];
+      } else {
+        const wrapped = conds.map((c) => (Array.isArray(c) ? { $or: c } : c));
+        filter.$and = wrapped;
+      }
     }
 
     const events = await Event.find(filter)
@@ -67,6 +118,11 @@ router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const event = await Event.findById(req.params.id).populate('venueId');
     if (!event) return res.status(404).json({ error: 'Event not found' });
+
+    if (event.status !== effectiveStatus(event)) {
+      event.status = effectiveStatus(event);
+      await event.save().catch(() => {});
+    }
 
     let userId = null;
     if (req.user) {

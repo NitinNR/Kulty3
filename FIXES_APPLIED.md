@@ -1,5 +1,61 @@
 # 🔧 Fixes Applied
 
+## Homepage Hero Events Stat — Shows Total Event Count, Not Just Upcoming
+
+### Issue
+The hero's "Events" stat showed the total of *upcoming* events only. Requirement: the hero stat should show the total event count (all events, including past), while the "Upcoming Events" section below still lists only upcoming events.
+
+### Fix Applied
+
+**File:** `frontend/src/pages/user/HomePage.jsx`
+- Kept `getEvents({ status: 'upcoming', limit: 4 })` for the "Upcoming Events" section list.
+- Added a lightweight `getEvents({ limit: 1 })` call whose `total` drives the hero "Events" stat — so the hero shows the real count of all events while the section below stays upcoming-only.
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Homepage Hero Stats — Shows Real Totals Instead of Placeholder Counts
+
+### Issue
+The hero section's stats row showed a hardcoded `100+` for Events (and `50+` for Venues as a fallback), or the length of the currently-fetched slice (e.g. `4+`) — not the real number of events/venues.
+
+### Fix Applied
+
+**File:** `frontend/src/pages/user/HomePage.jsx`
+1. Added `venueTotal` and `eventTotal` state.
+2. `fetchVenues` now stores the API's `total` venue count; the events fetch stores the API's `total` (upcoming) event count.
+3. `HeroSection` now takes `venueTotal`/`eventTotal` props and renders the actual totals (falling back to `50+`/`100+` only while data hasn't loaded yet).
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Past Events No Longer Shown as Upcoming
+
+### Issue
+Events whose date had already passed still appeared under "Upcoming Events" (and under the "All"/"Upcoming" tabs on the Events page) with an `upcoming` badge. This happened because `status` defaults to `upcoming` and is only set to `past` if an admin manually updates it — so stale stored statuses kept old events looking upcoming forever.
+
+### Fix Applied
+
+**File:** `backend/src/routes/events.js`
+1. Added `effectiveStatus(event)` helper — derives the true status from the event date: any event with a date before today is `past`, regardless of the stale stored value.
+2. **List route (`GET /events`)**:
+   - Fire-and-forget self-heal: `Event.updateMany({ date: { $lt: startOfToday }, status: { $ne: 'past' } }, { status: 'past' })` fixes the DB so every consumer sees the correct status.
+   - The `status` filter now also accounts for the date (via `$and` conditions), so `upcoming` excludes past-dated events and `past` includes them — even before the self-heal write lands.
+   - Every returned event gets its status overridden with the effective status.
+3. **Single route (`GET /events/:id`)** — persists the corrected status on the document when stale.
+
+**File:** `frontend/src/pages/user/HomePage.jsx`
+- "Upcoming Events" section now calls `getEvents({ status: 'upcoming', limit: 4 })` so past events never appear there.
+
+### Build Status
+✅ **Frontend build successful · Backend syntax check passed**
+
+---
+
 ## Venue Owner Flow — Existing Members No Longer Tagged as Venue Owners
 
 ### Issue

@@ -205,7 +205,7 @@ const Footer = () => (
 const VENUE_LIMIT = 12;
 
 // ── Hero Section ─────────────────────────────────────────────────────────────
-const HeroSection = ({ venues, events, onStartEarning, onExploreVenues }) => {
+const HeroSection = ({ venueTotal, eventTotal, onStartEarning, onExploreVenues }) => {
   return (
     <div className="relative w-full overflow-hidden rounded-2xl md:rounded-3xl mb-8"
       style={{ minHeight: '420px', maxHeight: '560px' }}>
@@ -259,8 +259,8 @@ const HeroSection = ({ venues, events, onStartEarning, onExploreVenues }) => {
         {/* Stats row */}
         <div className="flex items-center gap-6 sm:gap-8 mb-6">
           {[
-            { value: venues?.length > 0 ? `${venues.length}+` : '50+', label: 'Venues' },
-            { value: events?.length > 0 ? `${events.length}+` : '100+', label: 'Events' },
+            { value: venueTotal ? `${venueTotal}+` : '50+', label: 'Venues' },
+            { value: eventTotal ? `${eventTotal}+` : '100+', label: 'Events' },
             { value: '10%', label: 'Max Cashback' },
           ].map(({ value, label }) => (
             <div key={label}>
@@ -299,6 +299,8 @@ const HeroSection = ({ venues, events, onStartEarning, onExploreVenues }) => {
 export const HomePage = () => {
   const [venues,      setVenues]      = useState([]);
   const [events,      setEvents]      = useState([]);
+  const [venueTotal,  setVenueTotal]  = useState(0);
+  const [eventTotal,  setEventTotal]  = useState(0);
   const [loading,     setLoading]     = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore,     setHasMore]     = useState(false);
@@ -335,6 +337,7 @@ export const HomePage = () => {
       const vr = await getVenues(params);
       const fetched = vr.data?.venues || [];
       const total   = vr.data?.total  || 0;
+      setVenueTotal(total);
       setVenues((prev) => append ? [...prev, ...fetched] : fetched);
       setHasMore(pg * VENUE_LIMIT < total);
       setVenuePage(pg);
@@ -351,8 +354,11 @@ export const HomePage = () => {
   }, [search, category, city]);
 
   useEffect(() => {
-    getEvents({ limit: 4 })
+    getEvents({ status: 'upcoming', limit: 4 })
       .then((er) => setEvents(er.data?.events || []))
+      .catch(console.error);
+    getEvents({ limit: 1 })
+      .then((er) => setEventTotal(er.data?.total || 0))
       .catch(console.error);
   }, []);
 
@@ -392,8 +398,8 @@ export const HomePage = () => {
 
         {/* ── Hero Section ─────────────────────────────────── */}
         <HeroSection
-          venues={venues}
-          events={events}
+          venueTotal={venueTotal}
+          eventTotal={eventTotal}
           onStartEarning={() => navigate('/card')}
           onExploreVenues={() => venuesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
         />
