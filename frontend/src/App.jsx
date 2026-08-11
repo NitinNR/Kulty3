@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
@@ -61,7 +62,27 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
-          <Routes>
+          <AnimatedRoutes />
+        </ToastProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
+
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); }, [pathname]);
+  return null;
+};
+
+const AnimatedRoutes = () => {
+  const location = useLocation();
+  const isDetail = /^\/venues\/[^/]+$/.test(location.pathname) || /^\/events\/[^/]+$/.test(location.pathname);
+  return (
+    <>
+      <ScrollToTop />
+      <div key={location.pathname} className={isDetail ? 'page-transition page-transition--detail' : 'page-transition'}>
+        <Routes location={location}>
             {/* Public */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/partner" element={<PartnerLoginPage />} />
@@ -101,9 +122,8 @@ export default function App() {
 
             {/* Root smart redirect */}
             <Route path="/" element={<RootRedirect />} />
-          </Routes>
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
+        </Routes>
+      </div>
+    </>
   );
-}
+};

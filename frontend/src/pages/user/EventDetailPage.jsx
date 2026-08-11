@@ -49,7 +49,7 @@ const MiniEventCard = ({ event, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className="flex-shrink-0 w-52 rounded-2xl overflow-hidden cursor-pointer group"
+      className="flex-shrink-0 w-52 rounded-2xl overflow-hidden cursor-pointer group active:scale-[0.97]"
       style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
     >
       <div className="relative overflow-hidden h-32">

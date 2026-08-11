@@ -77,7 +77,7 @@ const VenueCard = ({ venue, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className="rounded-2xl overflow-hidden cursor-pointer group transition-all duration-200 hover:-translate-y-0.5"
+      className="rounded-2xl overflow-hidden cursor-pointer group transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
       style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
     >
       {/* ── Image ── */}
@@ -555,7 +555,7 @@ export const HomePage = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {events.map((event) => (
                 <div key={event._id}
-                  className="flex items-center gap-4 p-4 rounded-xl cursor-pointer hover:opacity-80 transition"
+                  className="flex items-center gap-4 p-4 rounded-xl cursor-pointer hover:opacity-80 active:scale-[0.99] transition"
                   style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
                   onClick={() => navigate(`/events/${event._id}`)}>
                   {event.bannerImage ? (
