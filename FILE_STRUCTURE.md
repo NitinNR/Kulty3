@@ -96,14 +96,24 @@ kulty3/
 │       │   ├── User.js               # User schema
 │       │   ├── Venue.js              # Venue schema
 │       │   ├── Event.js              # Event schema
-│       │   └── Entry.js              # Entry & bills schema
+│       │   ├── Entry.js              # Entry & bills schema
+│       │   └── Payment.js            # Razorpay order/payment ledger
 │       │
 │       ├── 🛡️ Middleware
 │       │   ├── firebaseAuth.js       # Token verification
 │       │   └── requireRole.js        # Role authorization
 │       │
 │       ├── 🔧 Services
-│       │   └── firebaseAdmin.js      # Firebase admin init
+│       │   ├── firebaseAdmin.js      # Firebase admin init
+│       │   ├── paymentSettlement.js  # Shared settlement primitives
+│       │   └── reconcile.js          # Captured-but-unactivated recovery
+│       │
+│       ├── 🧰 Utils
+│       │   └── subscription.js       # Entitlement / renewal math
+│       │
+│       ├── 🧪 Tests (plain node, no framework)
+│       │   ├── test-subscription.mjs # npm test — entitlement math
+│       │   └── test-webhook.mjs      # npm run test:webhook — signed events
 │       │
 │       └── 🛣️ API Routes
 │           ├── auth.js               # POST /auth/complete-profile
@@ -111,7 +121,8 @@ kulty3/
 │           ├── venues.js             # CRUD /venues
 │           ├── events.js             # CRUD /events
 │           ├── entries.js            # Scan, bills, history
-│           ├── payments.js           # Create order, verify
+│           ├── payments.js           # Create order, verify, my, webhook
+│           ├── adminPayments.js      # Reconcile + stuck payments
 │           └── admin.js              # Dashboard, stats
 │
 └── node_modules/                     # All dependencies (auto-generated)
@@ -128,17 +139,20 @@ kulty3/
 - **Contexts**: 2 files
 - **Routes**: 3 files
 - **Hooks**: 1 file
+- **Utils**: 1 file
 - **Config**: 3 files
-- **Total**: ~30 files (excluding node_modules)
+- **Total**: ~31 files (excluding node_modules)
 
 ### Backend
-- **Models**: 4 files
-- **Routes**: 7 files
+- **Models**: 6 files
+- **Routes**: 8 files
 - **Middleware**: 2 files
-- **Services**: 1 file
+- **Services**: 3 files
+- **Utils**: 1 file
 - **Config**: 1 file
 - **Server**: 1 file
-- **Total**: ~16 files (excluding node_modules)
+- **Tests**: 2 files
+- **Total**: ~24 files (excluding node_modules)
 
 ### Documentation
 - **Guides**: 5 markdown files
@@ -161,21 +175,28 @@ kulty3/
 ### Critical Components
 - `LoginPage.jsx` - Authentication
 - `PaymentPage.jsx` - Razorpay integration
+- `utils/subscription.js` - Membership expiry / renewal checks (mirrors backend)
 - `CardPage.jsx` - Membership card display
 - `HomePage.jsx` - Venue browsing
 - `EntryHistoryPage.jsx` - User entry history
 
 ### Critical Routes
 - `auth.js` - Profile completion
-- `payments.js` - Razorpay integration
+- `payments.js` - Razorpay orders, verification, webhook settlement, history
+- `adminPayments.js` - Bulk reconcile + stuck-payment visibility (admin/cron)
 - `users.js` - User management
 - `admin.js` - Admin statistics
+
+### Critical Services
+- `paymentSettlement.js` - One settle path shared by /verify, webhook, reconcile
+- `reconcile.js` - Recovers captured-but-unactivated payments (per-user + bulk)
 
 ### Critical Models
 - `User.js` - User with subscription
 - `Entry.js` - Entry with bills array
 - `Venue.js` - Venue with ownership
 - `Event.js` - Event details
+- `Payment.js` - Razorpay order/payment ledger (webhook reconciliation)
 
 ---
 
@@ -209,6 +230,11 @@ Required variables:
 - `FIREBASE_CLIENT_EMAIL` - Firebase email
 - `RAZORPAY_KEY_ID` - Razorpay key
 - `RAZORPAY_KEY_SECRET` - Razorpay secret
+- `RAZORPAY_WEBHOOK_SECRET` - Razorpay webhook signing secret (required for
+  `POST /api/payments/webhook`; without it the endpoint returns 500 and no
+  membership is ever activated by webhook)
+- `CRON_SECRET` - Optional bearer token for `GET/POST /api/admin/payments/reconcile`
+  (per-user reconcile runs automatically on `GET /api/payments/my`)
 
 ### Frontend (.env)
 Required variables:
@@ -306,6 +332,22 @@ Frontend (Display)
   bills: [{ imageUrl, amount, status, verifiedBy }],
   cashback: { amount, status },
   createdAt
+}
+```
+
+### Payments
+One immutable row per Razorpay order. This is the ledger that lets
+`POST /api/payments/webhook` resolve the payer for an order even after the user
+has since created other orders.
+```javascript
+{
+  razorpayOrderId, razorpayPaymentId, userId, firebaseUid,
+  amount, currency, plan, receipt,
+  status, // created | captured | failed | partially_refunded | refunded | disputed
+  capturedAt, refundedAt, failedAt, refundId, disputeId,
+  activatedVia, // verify | webhook | admin
+  events: [{ event, at, activatedVia }],
+  createdAt, updatedAt
 }
 ```
 

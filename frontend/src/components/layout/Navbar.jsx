@@ -4,6 +4,7 @@ import { logout } from '../../services/firebase';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { getVenues, getEvents } from '../../services/api';
+import { isSubscriptionLive } from '../../utils/subscription';
 
 const NAV_LINKS = [
   { label: 'Venues',     href: '/home'      },
@@ -23,7 +24,7 @@ export const Navbar = () => {
   const navigate          = useNavigate();
   const location          = useLocation();
   const { profile }       = useAuth();
-  const isMember          = profile?.subscription?.status === 'active';
+  const isMember          = isSubscriptionLive(profile?.subscription);
 
   const inputRef        = useRef(null);
   const searchPanelRef  = useRef(null);

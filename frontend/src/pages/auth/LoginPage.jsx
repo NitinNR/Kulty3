@@ -6,6 +6,7 @@ import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Spinner } from '../../components/common/Spinner';
 import { useAuth } from '../../hooks/useAuth';
+import { isSubscriptionLive } from '../../utils/subscription';
 
 export const LoginPage = () => {
   const [loading, setLoading] = useState(false);
@@ -29,7 +30,7 @@ export const LoginPage = () => {
       navigate('/venue', { replace: true });
     } else if (!profile.name) {
       navigate('/complete-profile', { replace: true });
-    } else if (profile.subscription?.status === 'active') {
+    } else if (isSubscriptionLive(profile.subscription)) {
       // Already a subscribed member — go straight to the app
       navigate('/home', { replace: true });
     } else if (profile.intentRole === 'venue_owner') {

@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Spinner } from '../components/common/Spinner';
+import { isSubscriptionLive } from '../utils/subscription';
 
 export const SubscriptionRoute = ({ children }) => {
   const { profile, loading } = useAuth();
@@ -18,7 +19,9 @@ export const SubscriptionRoute = ({ children }) => {
     return <Navigate to="/apply-venue" replace />;
   }
 
-  if (profile?.subscription?.status !== 'active') {
+  // Live term, not merely status 'active' — a lapsed membership must be sent to
+  // checkout rather than treated as entitled.
+  if (!isSubscriptionLive(profile?.subscription)) {
     return <Navigate to="/payment" replace />;
   }
 
