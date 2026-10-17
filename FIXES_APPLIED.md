@@ -1,5 +1,51 @@
 # 🔧 Fixes Applied
 
+## Infinite API loop — `GET /users/me` + `GET /payments/my`
+
+### Problem
+The app was firing both endpoints continuously.
+
+### Root cause
+`AuthContext.fetchProfile` called `setProfile(profileRes.data)` with a **brand-new object on every call**, even when the data was identical. The payment page's double-charge guard (`PaymentPage.jsx`) lists `profile` in its effect deps *and* calls `refreshProfile()` inside its poll loop — so each `setProfile` re-identified `profile`, which restarted the effect, which called `refreshProfile()` again → `getMe()` + `getMyPayments()` forever. `refreshProfile` was also re-created on every provider render, so `PartnerLoginPage`'s effect re-ran on every context render.
+
+### Fix
+- **`frontend/src/contexts/AuthContext.jsx`**
+  - `fetchProfile` now only commits a new `profile` when the data actually changed (JSON compare), so identical refetches no longer re-render and cannot restart `[profile]`-keyed effects.
+  - `refreshProfile` and `logout` wrapped in `useCallback`; the provider value in `useMemo` — stable identities so effects that list them no longer re-run on every render.
+
+### Result
+- Normal payment-page visit: **1×** `/payments/my` + **1×** `/users/me` (was unbounded).
+- With an in-flight order the guard still polls, but is bounded to its 5 attempts.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-DjIiWo1e.js`)
+
+---
+
+## Security hardening — mass assignment, IDOR, ReDoS, data leakage
+
+### Problems found
+1. **Mass assignment** — `PATCH /users/me` applied `req.body` verbatim (a user could set their own `role`, `subscription`, `membershipId`, …); `POST /applications` spread `...req.body` after `userId` (self-approval / impersonation); venue create/update spread/assigned `req.body` (owner could set `staff`, `ownerId`, `status`).
+2. **IDOR** — `GET /entries/venue/:venueId` and `PATCH /entries/:entryId/bills/:billId` only checked the caller had a venue role, not that they belonged to *that* venue, so any venue account could read/approve another venue's check-ins and bills.
+3. **ReDoS / regex injection** — user-supplied `search` and city values were interpolated straight into `new RegExp(...)` (`venues.js`, `events.js`, `admin.js`, `cities.js`, application→city in `admin.js`).
+4. **Data leakage** — public venue responses exposed the `staff` email list: `GET /venues`, `GET /venues/:id`, venue objects populated by `GET /events`, `GET /events/:id`, `GET /entries/my`, and `GET /users/favorites`.
+5. `x-powered-by` header advertised the stack.
+
+### Fixes
+- **New `backend/src/utils/escapeRegex.js`** — escapes regex metacharacters; applied everywhere untrusted input reaches a `RegExp` (`venues.js`, `events.js`, `admin.js`, `cities.js`).
+- **`backend/src/routes/users.js`** — `PATCH /me` now allow-lists `name`, `profilePhoto`, `intentRole` via `$set`; stripped `-staff` from the favorites venue query.
+- **`backend/src/routes/applications.js`** — `POST /` now picks only `businessName/category/description/city/address/contactPhone`, forces `userId` + `status:'pending'`.
+- **`backend/src/routes/entries.js`** — both venue-scoped routes now verify the caller owns/is staff of `entry.venueId`; the venue lookup is reused for cashback; `GET /my` populates `venueId` with `-staff`.
+- **`backend/src/routes/venues.js`** — content-field allow-list for POST/PUT (`ownerId`/`status` privileged to admin only, `staff` never mass-assignable); public list/detail select `-staff`.
+- **`backend/src/routes/events.js`** — escaped `search`; populated venues select `-staff`.
+- **`backend/src/routes/admin.js`** — escaped admin venue search + application→city lookup.
+- **`backend/src/server.js`** — `app.disable('x-powered-by')`.
+
+### Build Status
+✅ **Backend syntax check passed** (`node --check` on all 9 changed/new files)
+
+---
+
 ## Phone Login — captcha only when phone auth is enabled
 
 ### Problem

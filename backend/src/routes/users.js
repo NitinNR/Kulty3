@@ -47,13 +47,24 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
+// Fields a user may edit on their own profile. Everything else (role,
+// subscription, membershipId, qrCodeData, firebaseUid, ...) is server-managed
+// and must never be mass-assignable from the request body.
+const SELF_EDITABLE_FIELDS = ['name', 'profilePhoto', 'intentRole'];
+
 router.patch('/me', authenticateToken, async (req, res) => {
   try {
+    const updates = {};
+    for (const field of SELF_EDITABLE_FIELDS) {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    }
+
     const user = await User.findOneAndUpdate(
       { firebaseUid: req.user.uid },
-      req.body,
-      { new: true }
+      { $set: updates },
+      { new: true, runValidators: true }
     );
+    if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
   } catch (error) {
     logger.error('Error updating user:', { error: error.message, stack: error.stack });
@@ -87,7 +98,7 @@ router.get('/favorites', authenticateToken, async (req, res) => {
     const total  = user.favorites.length;
     const sliced = user.favorites.slice((pg - 1) * lim, pg * lim);
 
-    const venues = await Venue.find({ _id: { $in: sliced }, status: 'active' });
+    const venues = await Venue.find({ _id: { $in: sliced }, status: 'active' }).select('-staff');
 
     // preserve user's saved order
     const ordered = sliced
