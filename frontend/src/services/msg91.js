@@ -152,6 +152,38 @@ export const initMsg91Widget = (options = {}) => {
 export const isMsg91Initialized = () =>
   typeof window !== 'undefined' && typeof window.sendOtp === 'function';
 
+/**
+ * Resets the captcha MSG91 rendered into the persistent host.
+ *
+ * MSG91 appends its `<h-captcha>` element into `MSG91_CAPTCHA_RENDER_ID` exactly
+ * once (when the widget config loads) and never re-renders it. So after a login
+ * the previously-solved challenge stays on screen and can no longer be used —
+ * the usual fix was a full page refresh. Calling `reset()` on the element makes
+ * hCaptcha present a fresh, un-solved challenge instead.
+ *
+ * Safe to call at any time: it returns false when there is nothing to reset.
+ *
+ * @returns {boolean} whether at least one rendered captcha was reset
+ */
+export const resetMsg91Captcha = () => {
+  if (typeof document === 'undefined') return false;
+  const host = document.getElementById(MSG91_CAPTCHA_RENDER_ID);
+  if (!host) return false;
+
+  let reset = false;
+  for (const el of host.querySelectorAll('h-captcha')) {
+    try {
+      if (typeof el.reset !== 'function') continue;
+      el.reset(); // throws if hCaptcha isn't loaded / not rendered yet
+      reset = true;
+    } catch (_) {
+      // Not rendered yet or the API isn't available — the widget will render a
+      // fresh one on its own in that case.
+    }
+  }
+  return reset;
+};
+
 const notReady = () => new Error('MSG91 widget is not ready yet. Please try again.');
 
 // Wraps a callback-based widget method in a promise, with a safety timeout so

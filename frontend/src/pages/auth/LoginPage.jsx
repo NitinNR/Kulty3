@@ -9,10 +9,9 @@ import {
   sendMsg91Otp,
   extractMsg91ReqId,
   getMsg91ErrorMessage,
-  getMsg91WidgetData,
-  isCaptchaVerified,
 } from '../../services/msg91';
 import { retryMsg91Otp, verifyMsg91Otp } from '../../services/api';
+import { useMsg91Captcha, setMsg91LoginStep } from '../../hooks/useMsg91Captcha';
 import { Spinner } from '../../components/common/Spinner';
 import { OtpInput } from '../../components/auth/OtpInput';
 import { useAuth } from '../../hooks/useAuth';
@@ -62,12 +61,15 @@ export const LoginPage = () => {
   const [otp, setOtp] = useState('');
   const [reqId, setReqId] = useState('');
   const [cooldown, setCooldown] = useState(0);
-  const [captchaRequired, setCaptchaRequired] = useState(false);
-  const [captchaOk, setCaptchaOk] = useState(false);
-  const [otpLength, setOtpLength] = useState(DEFAULT_OTP_LENGTH);
   const navigate = useNavigate();
   const { isAuthenticated, loading: authLoading, profile } = useAuth();
   const widgetReadyRef = useRef(false);
+
+  // Captcha requirement / OTP length come from the shared MSG91 store, which
+  // also decides when the captcha host (App.jsx) is visible.
+  const { required: captchaRequired, verified: captchaOk, otpLength: widgetOtpLength } =
+    useMsg91Captcha();
+  const otpLength = widgetOtpLength > 0 ? widgetOtpLength : DEFAULT_OTP_LENGTH;
 
   // Resend cooldown ticker.
   useEffect(() => {
@@ -76,29 +78,11 @@ export const LoginPage = () => {
     return () => clearTimeout(timer);
   }, [cooldown]);
 
-  // MSG91 may require a captcha (hCaptcha/reCAPTCHA) before an OTP can be sent.
-  // It renders that into the persistent host at the app root and clears the
-  // solved token after every send, so poll its state to gate the Send button.
+  // Tell the captcha host (App.jsx) which part of the flow we're on so it can
+  // hide the captcha once the OTP step is reached.
   useEffect(() => {
-    if (!isMsg91Configured()) return undefined;
-    let cancelled = false;
-    let timer;
-    const poll = () => {
-      if (cancelled) return;
-      const data = getMsg91WidgetData();
-      const required = Boolean(data?.captchaValidations) && data?.widgetMeta?.captcha_type !== 2;
-      setCaptchaRequired(required);
-      setCaptchaOk(required ? Boolean(isCaptchaVerified()) : true);
-      const len = Number(data?.otpLength);
-      if (len > 0) setOtpLength(len);
-      timer = setTimeout(poll, 700);
-    };
-    timer = setTimeout(poll, 500);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, []);
+    setMsg91LoginStep(step);
+  }, [step]);
 
   // Redirect once profile is loaded
   useEffect(() => {
@@ -137,12 +121,6 @@ export const LoginPage = () => {
     }
   };
 
-  // The widget decides the OTP length (e.g. 4 or 6); mirror it in the UI.
-  const syncOtpLength = () => {
-    const len = Number(getMsg91WidgetData()?.otpLength);
-    if (len > 0) setOtpLength(len);
-  };
-
   // Ensures the widget is initialized (it's memoized and started once at app
   // level, so this normally just awaits the existing init).
   const ensureWidget = async () => {
@@ -170,7 +148,6 @@ export const LoginPage = () => {
       // Sends the OTP via the widget; resolves on success, rejects on failure.
       const data = await sendMsg91Otp(formattedPhone);
       setReqId(extractMsg91ReqId(data));
-      syncOtpLength();
       setOtp('');
       setCooldown(RESEND_COOLDOWN);
       setStep('otp');
@@ -190,7 +167,6 @@ export const LoginPage = () => {
       const res = await retryMsg91Otp(reqId);
       const nextReqId = res.data?.reqId;
       if (nextReqId) setReqId(nextReqId);
-      syncOtpLength();
       setOtp('');
       setCooldown(RESEND_COOLDOWN);
     } catch (err) {

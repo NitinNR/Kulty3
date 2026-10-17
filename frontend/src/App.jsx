@@ -1,11 +1,18 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { RoleRoute } from './routes/RoleRoute';
 import { useAuth } from './hooks/useAuth';
-import { initMsg91Widget, isMsg91Configured, MSG91_CAPTCHA_RENDER_ID } from './services/msg91';
+import { useMsg91Captcha } from './hooks/useMsg91Captcha';
+import {
+  initMsg91Widget,
+  isMsg91Configured,
+  isCaptchaVerified,
+  resetMsg91Captcha,
+  MSG91_CAPTCHA_RENDER_ID,
+} from './services/msg91';
 
 // Auth
 import { LoginPage } from './pages/auth/LoginPage';
@@ -60,8 +67,27 @@ const RootRedirect = () => {
 
 // Persistent host for MSG91's captcha. It must live at the app root (not inside
 // a route) so it exists before the widget initializes and never unmounts.
+//
+// MSG91 appends its captcha here once and never re-renders it, so we reset it
+// ourselves whenever it becomes needed again (e.g. after logout) to get a fresh
+// challenge. It's also hidden whenever it isn't required: once the user has
+// verified it, and on the OTP step (resends don't need a captcha).
 const Msg91CaptchaHost = () => {
   const { pathname } = useLocation();
+  const { verified, step } = useMsg91Captcha();
+  const wasVisibleRef = useRef(false);
+
+  const shouldShow = pathname === '/login' && step === 'method' && !verified;
+
+  useEffect(() => {
+    // Reset only when the captcha transitions into "needed" and isn't already
+    // solved, so we don't wipe a challenge the user is mid-way through.
+    if (shouldShow && !wasVisibleRef.current && !isCaptchaVerified()) {
+      resetMsg91Captcha();
+    }
+    wasVisibleRef.current = shouldShow;
+  }, [shouldShow]);
+
   return (
     <div
       id={MSG91_CAPTCHA_RENDER_ID}
@@ -71,9 +97,9 @@ const Msg91CaptchaHost = () => {
         bottom: 16,
         transform: 'translateX(-50%)',
         zIndex: 60,
-        // Only relevant on the login screen; hidden elsewhere (the node stays
-        // mounted so the widget's captcha instance is never destroyed).
-        visibility: pathname === '/login' ? 'visible' : 'hidden',
+        // The node always stays mounted (the widget's captcha instance must not
+        // be destroyed); only its visibility changes.
+        visibility: shouldShow ? 'visible' : 'hidden',
       }}
     />
   );

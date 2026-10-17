@@ -36,7 +36,8 @@ kulty3/
 │       │   └── ToastContext.jsx      # Notifications
 │       │
 │       ├── 🪝 Custom Hooks
-│       │   └── useAuth.js            # Auth hook
+│       │   ├── useAuth.js            # Auth hook
+│       │   └── useMsg91Captcha.js    # Shared MSG91 captcha state (polled store)
 │       │
 │       ├── 🔗 Services (API & Firebase)
 │       │   ├── firebase.js           # Firebase methods

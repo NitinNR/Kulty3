@@ -1,5 +1,30 @@
 # 🔧 Fixes Applied
 
+## Phone Login — stale captcha after logout + captcha always visible
+
+### Issues
+1. After logout the previously-solved captcha stayed on the login screen, so the page had to be refreshed to get a usable one.
+2. The captcha UI was shown the entire time the user was on `/login`, even after they had solved it.
+
+### Root Cause
+MSG91 appends its `<h-captcha>` element into the captcha host **once** (when the widget config loads) and never re-renders it, so a used challenge lingers. The host visibility was also keyed only off the route (`pathname === '/login'`).
+
+### Fix Applied
+**New `frontend/src/hooks/useMsg91Captcha.js`** — a single polled store (`useSyncExternalStore`) shared by the host and the login screen, exposing `{ required, verified, otpLength, step }`. Replaces the two independent widget polls.
+
+**`frontend/src/services/msg91.js`** — added `resetMsg91Captcha()`: finds the rendered `h-captcha` element(s) in the host and calls `reset()` to force a fresh, un-solved challenge (false when nothing is rendered).
+
+**`frontend/src/App.jsx` (`Msg91CaptchaHost`)** —
+- Shown only when `pathname === '/login' && step === 'method' && !verified` (hidden once verified, hidden on the OTP step).
+- Resets the captcha whenever it transitions into "needed" and isn't already solved → a fresh challenge after logout (or after going back from the OTP step), no refresh required.
+
+**`frontend/src/pages/auth/LoginPage.jsx`** — removed the local captcha/OTP-length state + poll, now consumes the shared hook; publishes its `step` via `setMsg91LoginStep(step)`.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-BIiBA97W.js`)
+
+---
+
 ## Phone Login — "Channel not provided in retryOtp()" + OTP verify 502 (verify & resend now server-side)
 
 ### Issue
