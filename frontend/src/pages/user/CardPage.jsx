@@ -4,6 +4,7 @@ import { MembershipCard } from '../../components/card/MembershipCard';
 import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
 import { useAuth } from '../../hooks/useAuth';
+import { isSubscriptionLive } from '../../utils/subscription';
 
 const T = {
   bg:       '#0d0d0d',
@@ -40,7 +41,7 @@ export const CardPage = () => {
     URL.revokeObjectURL(url);
   };
 
-  const isActive = profile?.subscription?.status === 'active';
+  const isActive = isSubscriptionLive(profile?.subscription);
 
   return (
     <div className="min-h-screen flex flex-col pb-20 md:pb-0" style={{ backgroundColor: T.bg }}>

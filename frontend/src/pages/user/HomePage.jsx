@@ -77,7 +77,7 @@ const VenueCard = ({ venue, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className="rounded-2xl overflow-hidden cursor-pointer group transition-all duration-200 hover:-translate-y-0.5"
+      className="rounded-2xl overflow-hidden cursor-pointer group transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
       style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
     >
       {/* ── Image ── */}
@@ -205,7 +205,7 @@ const Footer = () => (
 const VENUE_LIMIT = 12;
 
 // ── Hero Section ─────────────────────────────────────────────────────────────
-const HeroSection = ({ venues, events }) => {
+const HeroSection = ({ venueTotal, eventTotal, onStartEarning, onExploreVenues }) => {
   return (
     <div className="relative w-full overflow-hidden rounded-2xl md:rounded-3xl mb-8"
       style={{ minHeight: '420px', maxHeight: '560px' }}>
@@ -259,8 +259,8 @@ const HeroSection = ({ venues, events }) => {
         {/* Stats row */}
         <div className="flex items-center gap-6 sm:gap-8 mb-6">
           {[
-            { value: venues?.length > 0 ? `${venues.length}+` : '50+', label: 'Venues' },
-            { value: events?.length > 0 ? `${events.length}+` : '100+', label: 'Events' },
+            { value: venueTotal ? `${venueTotal}+` : '50+', label: 'Venues' },
+            { value: eventTotal ? `${eventTotal}+` : '100+', label: 'Events' },
             { value: '10%', label: 'Max Cashback' },
           ].map(({ value, label }) => (
             <div key={label}>
@@ -272,12 +272,14 @@ const HeroSection = ({ venues, events }) => {
 
         {/* CTA Buttons */}
         <div className="flex flex-wrap gap-3">
-          <button className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:scale-[1.03] hover:shadow-lg hover:shadow-amber-500/20"
+          <button onClick={onStartEarning}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:scale-[1.03] hover:shadow-lg hover:shadow-amber-500/20"
             style={{ backgroundColor: T.gold, color: '#000' }}>
             <Sparkles className="w-4 h-4" />
             Start Earning
           </button>
-          <button className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:bg-white/10"
+          <button onClick={onExploreVenues}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:bg-white/10"
             style={{
               backgroundColor: 'rgba(255,255,255,0.08)',
               color: '#fff',
@@ -297,6 +299,8 @@ const HeroSection = ({ venues, events }) => {
 export const HomePage = () => {
   const [venues,      setVenues]      = useState([]);
   const [events,      setEvents]      = useState([]);
+  const [venueTotal,  setVenueTotal]  = useState(0);
+  const [eventTotal,  setEventTotal]  = useState(0);
   const [loading,     setLoading]     = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore,     setHasMore]     = useState(false);
@@ -309,6 +313,7 @@ export const HomePage = () => {
   const sentinelRef    = useRef(null);
   const cityRef        = useRef(null);
   const searchInputRef = useRef(null);
+  const venuesRef      = useRef(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -332,6 +337,7 @@ export const HomePage = () => {
       const vr = await getVenues(params);
       const fetched = vr.data?.venues || [];
       const total   = vr.data?.total  || 0;
+      setVenueTotal(total);
       setVenues((prev) => append ? [...prev, ...fetched] : fetched);
       setHasMore(pg * VENUE_LIMIT < total);
       setVenuePage(pg);
@@ -348,8 +354,11 @@ export const HomePage = () => {
   }, [search, category, city]);
 
   useEffect(() => {
-    getEvents({ limit: 4 })
+    getEvents({ status: 'upcoming', limit: 4 })
       .then((er) => setEvents(er.data?.events || []))
+      .catch(console.error);
+    getEvents({ limit: 1 })
+      .then((er) => setEventTotal(er.data?.total || 0))
       .catch(console.error);
   }, []);
 
@@ -388,7 +397,12 @@ export const HomePage = () => {
       <div className="max-w-7xl mx-auto px-4 md:px-6 pt-6 md:pt-10">
 
         {/* ── Hero Section ─────────────────────────────────── */}
-        <HeroSection venues={venues} events={events} />
+        <HeroSection
+          venueTotal={venueTotal}
+          eventTotal={eventTotal}
+          onStartEarning={() => navigate('/card')}
+          onExploreVenues={() => venuesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        />
 
         {/* ── Search bar ───────────────────────────────────── */}
         <div className="relative mb-5"
@@ -471,7 +485,7 @@ export const HomePage = () => {
         </div>
 
         {/* ── Venues section ───────────────────────────────── */}
-        <div className="flex items-end justify-between mb-4">
+        <div ref={venuesRef} className="scroll-mt-4 flex items-end justify-between mb-4">
           <div>
             <h2 className="text-xl font-display font-bold text-white">
               {search
@@ -547,7 +561,7 @@ export const HomePage = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {events.map((event) => (
                 <div key={event._id}
-                  className="flex items-center gap-4 p-4 rounded-xl cursor-pointer hover:opacity-80 transition"
+                  className="flex items-center gap-4 p-4 rounded-xl cursor-pointer hover:opacity-80 active:scale-[0.99] transition"
                   style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
                   onClick={() => navigate(`/events/${event._id}`)}>
                   {event.bannerImage ? (

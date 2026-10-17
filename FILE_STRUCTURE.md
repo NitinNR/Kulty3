@@ -36,10 +36,13 @@ kulty3/
 │       │   └── ToastContext.jsx      # Notifications
 │       │
 │       ├── 🪝 Custom Hooks
-│       │   └── useAuth.js            # Auth hook
+│       │   ├── useAuth.js            # Auth hook
+│       │   ├── useMsg91Captcha.js    # Shared MSG91 captcha state (polled store)
+│       │   └── useAppSettings.js     # Global app settings store (auth methods)
 │       │
 │       ├── 🔗 Services (API & Firebase)
 │       │   ├── firebase.js           # Firebase methods
+│       │   ├── msg91.js              # MSG91 OTP Widget client
 │       │   └── api.js                # Axios API client
 │       │
 │       ├── 🛣️ Route Protection
@@ -60,6 +63,9 @@ kulty3/
 │       │   │   ├── Navbar.jsx        # Top navigation
 │       │   │   ├── BottomNav.jsx     # Mobile bottom nav
 │       │   │   └── Sidebar.jsx       # Admin/venue sidebar
+│       │   │
+│       │   ├── auth/                 # Auth helpers
+│       │   │   └── OtpInput.jsx      # 6-digit OTP box input (auto-advance/paste)
 │       │   │
 │       │   └── card/                 # Card component
 │       │       └── MembershipCard.jsx # QR membership card
@@ -96,14 +102,28 @@ kulty3/
 │       │   ├── User.js               # User schema
 │       │   ├── Venue.js              # Venue schema
 │       │   ├── Event.js              # Event schema
-│       │   └── Entry.js              # Entry & bills schema
+│       │   ├── Entry.js              # Entry & bills schema
+│       │   ├── VenueApplication.js   # Venue owner application
+│       │   ├── City.js               # Cities (homepage filter)
+│       │   └── Settings.js           # Singleton app settings (auth methods)
+│       │   └── Payment.js            # Razorpay order/payment ledger
 │       │
 │       ├── 🛡️ Middleware
 │       │   ├── firebaseAuth.js       # Token verification
 │       │   └── requireRole.js        # Role authorization
 │       │
 │       ├── 🔧 Services
-│       │   └── firebaseAdmin.js      # Firebase admin init
+│       │   ├── firebaseAdmin.js      # Firebase admin init
+│       │   └── msg91.js              # MSG91 access-token verification
+│       │   ├── paymentSettlement.js  # Shared settlement primitives
+│       │   └── reconcile.js          # Captured-but-unactivated recovery
+│       │
+│       ├── 🧰 Utils
+│       │   └── subscription.js       # Entitlement / renewal math
+│       │
+│       ├── 🧪 Tests (plain node, no framework)
+│       │   ├── test-subscription.mjs # npm test — entitlement math
+│       │   └── test-webhook.mjs      # npm run test:webhook — signed events
 │       │
 │       └── 🛣️ API Routes
 │           ├── auth.js               # POST /auth/complete-profile
@@ -111,7 +131,11 @@ kulty3/
 │           ├── venues.js             # CRUD /venues
 │           ├── events.js             # CRUD /events
 │           ├── entries.js            # Scan, bills, history
-│           ├── payments.js           # Create order, verify
+│           ├── applications.js       # Venue owner applications
+│           ├── cities.js             # Cities (public + admin)
+│           ├── settings.js           # Global settings (public + admin)
+│           ├── payments.js           # Create order, verify, my, webhook
+│           ├── adminPayments.js      # Reconcile + stuck payments
 │           └── admin.js              # Dashboard, stats
 │
 └── node_modules/                     # All dependencies (auto-generated)
@@ -127,18 +151,25 @@ kulty3/
 - **Services**: 2 files
 - **Contexts**: 2 files
 - **Routes**: 3 files
-- **Hooks**: 1 file
+- **Hooks**: 3 files
+- **Utils**: 1 file
 - **Config**: 3 files
-- **Total**: ~30 files (excluding node_modules)
+- **Total**: ~31 files (excluding node_modules)
 
 ### Backend
-- **Models**: 4 files
-- **Routes**: 7 files
+- **Models**: 7 files
+- **Routes**: 10 files
 - **Middleware**: 2 files
-- **Services**: 1 file
+- **Services**: 2 files
+- **Models**: 6 files
+- **Routes**: 8 files
+- **Middleware**: 2 files
+- **Services**: 3 files
+- **Utils**: 1 file
 - **Config**: 1 file
 - **Server**: 1 file
-- **Total**: ~16 files (excluding node_modules)
+- **Tests**: 2 files
+- **Total**: ~24 files (excluding node_modules)
 
 ### Documentation
 - **Guides**: 5 markdown files
@@ -161,21 +192,30 @@ kulty3/
 ### Critical Components
 - `LoginPage.jsx` - Authentication
 - `PaymentPage.jsx` - Razorpay integration
+- `utils/subscription.js` - Membership expiry / renewal checks (mirrors backend)
 - `CardPage.jsx` - Membership card display
 - `HomePage.jsx` - Venue browsing
 - `EntryHistoryPage.jsx` - User entry history
 
 ### Critical Routes
 - `auth.js` - Profile completion
-- `payments.js` - Razorpay integration
+- `payments.js` - Razorpay orders, verification, webhook settlement, history
+- `adminPayments.js` - Bulk reconcile + stuck-payment visibility (admin/cron)
 - `users.js` - User management
+- `settings.js` - Global app settings (auth methods)
 - `admin.js` - Admin statistics
+
+### Critical Services
+- `paymentSettlement.js` - One settle path shared by /verify, webhook, reconcile
+- `reconcile.js` - Recovers captured-but-unactivated payments (per-user + bulk)
 
 ### Critical Models
 - `User.js` - User with subscription
 - `Entry.js` - Entry with bills array
 - `Venue.js` - Venue with ownership
 - `Event.js` - Event details
+- `Settings.js` - Singleton app settings
+- `Payment.js` - Razorpay order/payment ledger (webhook reconciliation)
 
 ---
 
@@ -209,6 +249,13 @@ Required variables:
 - `FIREBASE_CLIENT_EMAIL` - Firebase email
 - `RAZORPAY_KEY_ID` - Razorpay key
 - `RAZORPAY_KEY_SECRET` - Razorpay secret
+- `MSG91_AUTHKEY` - MSG91 account authkey (server-side token verification)
+- `MSG91_WIDGET_ID` - MSG91 OTP Widget id (public; used for retry/verify)
+- `RAZORPAY_WEBHOOK_SECRET` - Razorpay webhook signing secret (required for
+  `POST /api/payments/webhook`; without it the endpoint returns 500 and no
+  membership is ever activated by webhook)
+- `CRON_SECRET` - Optional bearer token for `GET/POST /api/admin/payments/reconcile`
+  (per-user reconcile runs automatically on `GET /api/payments/my`)
 
 ### Frontend (.env)
 Required variables:
@@ -217,6 +264,8 @@ Required variables:
 - `VITE_FIREBASE_PROJECT_ID` - Firebase project
 - `VITE_RAZORPAY_KEY_ID` - Razorpay key
 - `VITE_API_BASE_URL` - Backend API URL
+- `VITE_MSG91_WIDGET_ID` - MSG91 OTP Widget ID
+- `VITE_MSG91_AUTH_TOKEN` - MSG91 OTP Widget token
 
 ---
 
@@ -263,6 +312,8 @@ Frontend (Display)
 - `/admin/users` - User management
 - `/admin/entries` - Entry logs
 - `/admin/bills` - Bill management
+- `/admin/cities` - Manage cities
+- `/admin/settings` - Login/auth settings
 
 ### Venue Owner Routes (Ready)
 - `/venue/dashboard` - Venue dashboard
@@ -308,6 +359,27 @@ Frontend (Display)
   createdAt
 }
 ```
+
+### Settings
+```javascript
+{
+  key: 'global',
+  authMethods: { google: true, phone: true },
+}
+```
+### Payments
+One immutable row per Razorpay order. This is the ledger that lets
+`POST /api/payments/webhook` resolve the payer for an order even after the user
+has since created other orders.
+```javascript
+{
+  razorpayOrderId, razorpayPaymentId, userId, firebaseUid,
+  amount, currency, plan, receipt,
+  status, // created | captured | failed | partially_refunded | refunded | disputed
+  capturedAt, refundedAt, failedAt, refundId, disputeId,
+  activatedVia, // verify | webhook | admin
+  events: [{ event, at, activatedVia }],
+  createdAt, updatedAt
 
 ---
 

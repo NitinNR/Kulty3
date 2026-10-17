@@ -1,9 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Shield, Zap, Star } from 'lucide-react';
-import { createPaymentOrder, verifyPayment } from '../../services/api';
+import { ArrowLeft, Check, Shield, Zap, Star, AlertTriangle } from 'lucide-react';
+import { createPaymentOrder, verifyPayment, getMyPayments } from '../../services/api';
 import { Spinner } from '../../components/common/Spinner';
 import { useAuth } from '../../hooks/useAuth';
+import { isSubscriptionLive } from '../../utils/subscription';
+
+// How long a still-unsettled order is treated as "possibly paid, don't retry".
+const RECENT_PAYMENT_MS = 30 * 60 * 1000;
+const GUARD_POLL_ATTEMPTS = 5;
+const GUARD_POLL_MS = 3000;
 
 const T = {
   bg:     '#0d0d0d',
@@ -26,8 +32,15 @@ const PERKS = [
 export const PaymentPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+  const [checkingInFlight, setCheckingInFlight] = useState(true);
+  const [inFlightPayment, setInFlightPayment]   = useState(null);
   const navigate              = useNavigate();
   const { profile, refreshProfile } = useAuth();
+
+  // refreshProfile is re-created on every AuthProvider render, so it is held in
+  // a ref — putting it in an effect dep list would restart the poll each render.
+  const refreshRef = useRef(refreshProfile);
+  refreshRef.current = refreshProfile;
 
   // Load Razorpay SDK
   useEffect(() => {
@@ -38,10 +51,65 @@ export const PaymentPage = () => {
     return () => document.body.removeChild(script);
   }, []);
 
-  // Already subscribed → skip this page
+  // Already subscribed → skip this page.
+  // Keyed on "live", not just status: a lapsed term still reads as
+  // status 'active' in a stale profile, and that member must be able to renew.
+  const hasLiveSub = isSubscriptionLive(profile?.subscription);
+
   useEffect(() => {
-    if (profile?.subscription?.status === 'active') navigate('/card', { replace: true });
-  }, [profile, navigate]);
+    if (profile && hasLiveSub) navigate('/card', { replace: true });
+  }, [profile, hasLiveSub, navigate]);
+
+  /**
+   * Double-charge guard.
+   *
+   * If a previous order is still unsettled, this member may already have paid —
+   * the browser could have closed before /verify, and the webhook may not have
+   * landed yet. Paying again would charge them twice. So: give the settlement a
+   * few seconds to arrive, send them straight to the card if it does, and warn
+   * rather than silently re-offering checkout if it does not.
+   */
+  useEffect(() => {
+    if (!profile || hasLiveSub) { setCheckingInFlight(false); return; }
+    let cancelled = false;
+
+    const run = async () => {
+      for (let attempt = 0; attempt < GUARD_POLL_ATTEMPTS; attempt += 1) {
+        try {
+          // GET /payments/my also triggers server-side reconciliation of this
+          // member's stuck orders, so this call can itself settle the payment.
+          const { data } = await getMyPayments();
+
+          // Always re-read the freshest entitlement: the reconcile above may
+          // have just activated it, and the local profile would be stale.
+          const fresh = await refreshRef.current();
+          if (cancelled) return;
+
+          if (isSubscriptionLive(fresh?.subscription)) {
+            navigate('/payment/success', { replace: true });
+            return;
+          }
+
+          const recent = (data?.payments || []).find(
+            (p) => p.status === 'created' && Date.now() - new Date(p.createdAt).getTime() < RECENT_PAYMENT_MS
+          );
+          setInFlightPayment(recent || null);
+
+          // Nothing pending and still not live — safe to show checkout.
+          if (!recent) { setCheckingInFlight(false); return; }
+        } catch {
+          // A failed check must never block checkout — fail open.
+          if (!cancelled) { setInFlightPayment(null); setCheckingInFlight(false); return; }
+        }
+
+        await new Promise((r) => setTimeout(r, GUARD_POLL_MS));
+      }
+      if (!cancelled) setCheckingInFlight(false);
+    };
+
+    run();
+    return () => { cancelled = true; };
+  }, [profile, hasLiveSub, navigate]);
 
   const handlePayment = async () => {
     try {
@@ -67,8 +135,14 @@ export const PaymentPage = () => {
             });
             await refreshProfile();
             navigate('/payment/success');
-          } catch {
-            setError('Payment verification failed. Please contact support.');
+          } catch (err) {
+            // The money is captured at this point even if verification failed.
+            // Say so, so the member waits for the webhook instead of retrying
+            // and paying twice.
+            setError(
+              err?.response?.data?.error ||
+              'Payment received but verification is pending. Your membership will activate within a minute — refresh in a moment.'
+            );
           }
         },
         prefill: {
@@ -176,14 +250,36 @@ export const PaymentPage = () => {
           </div>
         )}
 
+        {/* In-flight payment guard — a previous order may already have been paid */}
+        {inFlightPayment && (
+          <div
+            className="rounded-xl px-4 py-3 text-sm flex gap-3"
+            style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.28)', color: '#fbbf24' }}
+          >
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">You have a payment we're still confirming</p>
+              <p className="mt-1" style={{ color: 'rgba(251,191,36,0.8)' }}>
+                An order placed a few minutes ago hasn't finished settling. If you
+                already paid, give it a moment — your membership activates
+                automatically and you will not be charged again. Only continue if
+                you're sure the previous attempt didn't go through.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* CTA */}
         <button
           onClick={handlePayment}
-          disabled={loading}
+          disabled={loading || checkingInFlight}
           className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-base transition-opacity disabled:opacity-60"
           style={{ background: T.gold, color: '#0d0d0d' }}
         >
-          {loading ? <Spinner size="sm" /> : <>Continue with Razorpay &rarr;</>}
+          {loading ? <Spinner size="sm" />
+            : checkingInFlight ? <>Checking payment status…</>
+            : inFlightPayment ? <>Pay again anyway &rarr;</>
+            : <>Continue with Razorpay &rarr;</>}
         </button>
 
         {/* Skip */}

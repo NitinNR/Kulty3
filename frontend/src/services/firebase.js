@@ -5,6 +5,7 @@ import {
   GoogleAuthProvider,
   RecaptchaVerifier,
   signInWithPhoneNumber,
+  signInWithCustomToken as firebaseSignInWithCustomToken,
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
@@ -53,6 +54,19 @@ export const sendPhoneOTP = async (phoneNumber, verifier) => {
 export const verifyPhoneOTP = async (confirmationResult, otp) => {
   try {
     const result = await confirmationResult.confirm(otp);
+    return result.user;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Exchanges a server-minted Firebase custom token (e.g. from the MSG91 OTP
+// flow) for a real Firebase session. onAuthStateChanged picks it up.
+export const signInWithCustomToken = async (customToken) => {
+  try {
+    const result = await firebaseSignInWithCustomToken(auth, customToken);
+    // Force a token refresh so the backend receives the correct claims
+    await result.user.getIdToken(true);
     return result.user;
   } catch (error) {
     throw error;

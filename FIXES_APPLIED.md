@@ -1,5 +1,578 @@
 # 🔧 Fixes Applied
 
+## Phone Login — captcha only when phone auth is enabled
+
+### Problem
+With the new admin toggle, a Google-only setup (phone auth disabled) still initialized the MSG91 widget and rendered the captcha (`h-captcha`) on the login screen.
+
+### Fix
+- **`frontend/src/App.jsx`**
+  - `Msg91CaptchaHost` now also requires `authMethods.phone` (and settings to be loaded, to avoid a flash) before it becomes visible.
+  - App-level MSG91 widget init is skipped until settings are loaded and `authMethods.phone` is true — so on a Google-only setup the widget script/`h-captcha` is never loaded at all.
+- **`frontend/src/pages/auth/LoginPage.jsx`** — the lazy `ensureWidget()` now passes `captchaRenderId`, so if phone auth is enabled mid-session the widget still initializes correctly (previously it relied on the always-on app-level init).
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-BYIEJyYs.js`)
+
+---
+
+## Admin — configurable sign-in methods (Google / Phone)
+
+### Feature
+Admins can now choose which sign-in methods appear on the login screen (Google, Phone/OTP, or both) from **Admin → Login Settings**. At least one method must stay enabled.
+
+### Backend
+- **New `backend/src/models/Settings.js`** — singleton settings document (fixed key `global`) holding `authMethods: { google, phone }`.
+- **New `backend/src/routes/settings.js`**:
+  - `GET /api/settings` (public) → `{ authMethods }`, defaults to both enabled when unset/DB error (fail-open, so login is never locked out).
+  - `PUT /api/settings` (admin only) → validates that at least one method remains enabled, then saves.
+- **`backend/src/server.js`** — mounted `app.use('/api/settings', settingsRoutes)`.
+
+### Frontend
+- **`frontend/src/services/api.js`** — `getPublicSettings()` and `updateSettings(data)`.
+- **New `frontend/src/hooks/useAppSettings.js`** — shared, cached store (`useSyncExternalStore`) for the setting; defaults to both enabled until the API responds / on failure.
+- **New `frontend/src/pages/admin/AdminSettingsPage.jsx`** — two toggle switches + Save, validation, success/error states; pushes the saved values into the shared store so the login screen updates immediately.
+- **`frontend/src/App.jsx`** — route `/admin/settings` (admin-gated).
+- **`frontend/src/pages/admin/AdminDashboard.jsx`** — "Login Settings" quick-action card.
+- **`frontend/src/pages/auth/LoginPage.jsx`** — Google button, the "or use phone" divider, and the phone/OTP block now render conditionally from `authMethods`; the header icon follows the enabled method and a fallback message shows if neither is on.
+
+### Notes
+- Applies to the member login screen (`/login`). The partner login (`/partner`) is Google-only and unchanged.
+- Changing the setting only affects what the login UI offers; it does not revoke existing sessions.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-8Tbyv88z.js`)
+✅ **Backend syntax check passed** (`node --check`)
+
+---
+
+## Phone Login — stale captcha after logout + captcha always visible
+
+### Issues
+1. After logout the previously-solved captcha stayed on the login screen, so the page had to be refreshed to get a usable one.
+2. The captcha UI was shown the entire time the user was on `/login`, even after they had solved it.
+
+### Root Cause
+MSG91 appends its `<h-captcha>` element into the captcha host **once** (when the widget config loads) and never re-renders it, so a used challenge lingers. The host visibility was also keyed only off the route (`pathname === '/login'`).
+
+### Fix Applied
+**New `frontend/src/hooks/useMsg91Captcha.js`** — a single polled store (`useSyncExternalStore`) shared by the host and the login screen, exposing `{ required, verified, otpLength, step }`. Replaces the two independent widget polls.
+
+**`frontend/src/services/msg91.js`** — added `resetMsg91Captcha()`: finds the rendered `h-captcha` element(s) in the host and calls `reset()` to force a fresh, un-solved challenge (false when nothing is rendered).
+
+**`frontend/src/App.jsx` (`Msg91CaptchaHost`)** —
+- Shown only when `pathname === '/login' && step === 'method' && !verified` (hidden once verified, hidden on the OTP step).
+- Resets the captcha whenever it transitions into "needed" and isn't already solved → a fresh challenge after logout (or after going back from the OTP step), no refresh required.
+
+**`frontend/src/pages/auth/LoginPage.jsx`** — removed the local captcha/OTP-length state + poll, now consumes the shared hook; publishes its `step` via `setMsg91LoginStep(step)`.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-BIiBA97W.js`)
+
+---
+
+## Phone Login — "Channel not provided in retryOtp()" + OTP verify 502 (verify & resend now server-side)
+
+### Issue
+1. **Resend** failed with `Channel not provided in retryOtp() method.`
+2. **Verify** failed with `Request failed with status code 502`.
+
+### Root Cause (verified against the live MSG91 widget config + `otp-provider.js`)
+- The widget is a **Custom** widget — `widgetType.value === "2"`. For that type the SDK **requires** an explicit `retryChannel`:
+  `retryOtpExposed(n,r,o,s=null){ let u=null; "2"===widgetType&&(u=n); this.retryOtp(u,r,o,s) }`
+  → with `null` it throws *"Channel not provided in retryOtp() method."*
+- The widget also has `captchaValidations: 1`, so the SDK tries to run hCaptcha. Client-side `verifyOtp`/`retryOtp` were additionally fragile (network / proxy 502s surfaced to the UI).
+
+### Fix Applied — verify & resend moved to MSG91's documented widget REST APIs (server-side)
+**Backend `backend/src/services/msg91.js`:**
+- Added `MSG91_RETRY_CHANNEL_SMS = 11` and `retryOtp(reqId, retryChannel=11)` → `POST /api/v5/widget/retryOtp`.
+- Added `verifyOtp(reqId, otp)` → `POST /api/v5/widget/verifyOtp` (returns the JWT access token).
+- `isMsg91Configured()` now also requires `MSG91_WIDGET_ID`.
+
+**Backend `backend/src/routes/auth.js`:**
+- `POST /msg91/verify` now takes `{ reqId, otp }` (was `{ accessToken }`): `verifyOtp` → `verifyAccessToken` → match/create user → `createCustomToken`.
+- New `POST /msg91/retry` takes `{ reqId }` and returns `{ reqId }` (fresh reqId on SMS channel).
+
+**Frontend `services/api.js`:** replaced `verifyMsg91AccessToken` with `retryMsg91Otp(reqId)` and `verifyMsg91Otp(reqId, otp)`.
+
+**Frontend `services/msg91.js`:** removed the widget-based `retryMsg91Otp`/`verifyMsg91Otp`/`extractMsg91Token`. The widget is now used **only for sending** the OTP (it owns the captcha); verify/retry go through the backend.
+
+**Frontend `pages/auth/LoginPage.jsx`:** `handleResendOTP` → `retryMsg91Otp(reqId)`; `handleVerifyOTP` → `verifyMsg91Otp(reqId, otp)` then `signInWithCustomToken`. The client-side access-token exchange is gone.
+
+**Backend `.env` / `.env.example`:** added `MSG91_WIDGET_ID` (public — same value as `VITE_MSG91_WIDGET_ID`).
+
+### Environment note
+`MSG91_AUTHKEY` **and** `MSG91_WIDGET_ID` must both be set. On **Vercel**, add `MSG91_WIDGET_ID` to the backend's environment variables and redeploy. Restart the local backend after editing `.env`.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-BiEPrwuP.js`)
+✅ **Backend syntax check passed** (`node --check`)
+
+---
+
+## Phone Login — OTP boxes now match the widget's OTP length (4 vs 6 digits)
+
+### Issue
+MSG91 sent a **4-digit** code but the UI rendered **6** input boxes, so the code could never be completed.
+
+### Root Cause
+The OTP length was hard-coded (`const OTP_LENGTH = 6`). The widget exposes the real length as `widgetData.otpLength` (verified in `otp-provider.js`, which uses `n.widgetData.otpLength` for its own input `minlength`/`maxlength`).
+
+### Fix Applied
+**File:** `frontend/src/pages/auth/LoginPage.jsx`
+- Replaced the `OTP_LENGTH` constant with a `DEFAULT_OTP_LENGTH = 6` fallback and an `otpLength` state.
+- Added `syncOtpLength()` reading `getMsg91WidgetData()?.otpLength`, called after a successful send/resend.
+- The existing captcha/data poll also syncs `otpLength` once widget data loads.
+- The OTP step now uses `otpLength` for: the "Enter the N-digit code" text, the number of `OtpInput` boxes, and the Verify button's enabled state.
+
+`OtpInput` already re-renders its boxes from the `length` prop, so no change was needed there.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-Dd2ERqTM.js`)
+
+---
+
+## Phone Login — "Sending the OTP timed out" (captcha host must be persistent)
+
+### Issue
+After the previous change removed `captchaRenderId`, tapping **Send OTP** now always failed with `Sending the OTP timed out. Please try again.` (first load, not just after logout).
+
+### Root Cause (verified in `https://verify.msg91.com/otp-provider.js`)
+Captcha **is** enabled for the widget (`widgetData.captchaValidations === true`). In `requestOTP`:
+- `exposeMethods: true` **and** no `captchaRenderId` → MSG91 tries to run the captcha by itself (`this.hcaptchaService.verify()` or `grecaptcha.enterprise.execute(...)`). When that can't complete, it **never calls the success/failure callback** → our 30s timeout fires. (`hcaptchaService` errors only `console.error`, they don't reach our callback.)
+- `exposeMethods: true` **with** a `captchaRenderId` → MSG91 renders the captcha **once at init** into the element with that id (`document.getElementById(id).appendChild(vanillaHCaptcha)`), and the solved token enables sending.
+
+So removing `captchaRenderId` broke sending entirely, and the earlier post-logout hang was because the captcha host lived **inside `LoginPage`** and got unmounted on logout (MSG91 binds to it only once and never re-binds).
+
+### Fix Applied
+Give MSG91 a captcha host that exists **before init** and **never unmounts**.
+
+**File:** `frontend/src/services/msg91.js`
+- Added `MSG91_CAPTCHA_RENDER_ID = 'msg91-captcha'`.
+
+**File:** `frontend/src/App.jsx`
+- Added `Msg91CaptchaHost` — a `position: fixed` element mounted once at the app root (inside `BrowserRouter`), visible only on `/login`, hidden elsewhere via `visibility` (node stays mounted so the captcha instance is never destroyed).
+- `initMsg91Widget({ captchaRenderId: MSG91_CAPTCHA_RENDER_ID })`.
+
+**File:** `frontend/src/pages/auth/LoginPage.jsx`
+- Polls `getMsg91WidgetData()` + `isCaptchaVerified()` to detect when a captcha is required, and gates **Send OTP** until it's solved, with a "complete the verification challenge below" hint.
+
+### Notes
+- Simplest alternative if no captcha is wanted: set the widget's captcha/reCAPTCHA option to **None** in the MSG91 dashboard so `captchaValidations` is `false` (then the host stays empty and Send is never gated).
+- The app must start with the host present; it is rendered by `App` and committed before the init effect runs.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-By-Ef93R.js`)
+
+---
+
+## Phone Login — Logout→Login Fix (widget lifecycle) + OTP UI Revamp
+
+### Issue 1 — "Send OTP" stuck after logout (no page refresh)
+Logging in, then logging out and trying to send an OTP again left the button spinning forever.
+
+### Root Cause (found by inspecting `https://verify.msg91.com/otp-provider.js`)
+- The widget defines `window.sendOtp` / `retryOtp` / `verifyOtp` / `getWidgetData` / `isCaptchaVerified` **once**, as `writable: false, configurable: false`, and **only if they don't already exist** (`!window.hasOwnProperty(...)`).
+- `window.initSendOTP(config)` **removes the existing `<msg91-otp-provider>` element and creates a new one** — but the window globals are **not** rebound, so they keep pointing at the first (now destroyed) component instance.
+- Therefore any re-initialization permanently breaks later OTP calls (callbacks never fire → infinite spinner), and the non-configurable globals can't be deleted.
+
+### Fix Applied
+The widget must be initialized **exactly once for the page lifetime** and never torn down.
+
+**File:** `frontend/src/App.jsx`
+- Added a `useEffect(..., [])` that calls `initMsg91Widget()` once at app start (independent of the login route), so login/logout never destroys or re-initializes it.
+
+**File:** `frontend/src/services/msg91.js`
+- Removed the earlier `resetMsg91Widget()` approach (re-init is actively harmful here).
+- Documented the bind-once constraint on `initMsg91Widget()`.
+- `sendMsg91Otp` / `retryMsg91Otp` / `verifyMsg91Otp` now go through `callWidgetMethod(...)` with a **30s safety timeout**, so a missing callback surfaces a clear error instead of hanging the UI.
+
+**File:** `frontend/src/pages/auth/LoginPage.jsx`
+- Removed the per-mount init + teardown effect; `ensureWidget()` now just awaits the app-level (memoized) init.
+
+### Issue 2 — Captcha
+Captcha is disabled on the widget, and binding a captcha container (`captchaRenderId`) to a route-scoped element is what would get orphaned across login/logout. So captcha handling was removed from the login flow:
+- Deleted `frontend/src/components/auth/Msg91Captcha.jsx`.
+- `initMsg91Widget()` is no longer passed a `captchaRenderId` (defaults to empty).
+- Removed captcha state/gating from `LoginPage`.
+
+### UI Revamp (more attractive + simple)
+**File:** `frontend/src/pages/auth/LoginPage.jsx`
+- Switched to the dark/gold Kulty theme (matches the Partner login page): `#0d0d0d` background with ambient gold glow, rounded card, `KULTY` wordmark.
+- Cleaner two-step flow with an icon header, gold primary buttons, and a divider for "or use phone".
+- OTP step now shows a 6-digit code target and a **Resend countdown** (30s).
+- Auto-verifies as soon as the 6th digit is entered.
+
+**File:** `frontend/src/components/auth/OtpInput.jsx` (new)
+- 6 single-digit boxes with auto-advance, backspace/arrow navigation, paste support, and gold filled/focus states.
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Phone Login — Retry Uses Default Channel (SMS); Captcha Now Disabled
+
+### What
+Per updated requirements: captcha is disabled in the MSG91 widget, and OTP retry should use only the default channel (SMS).
+
+### `frontend/src/services/msg91.js`
+- Removed the unused multi-channel `MSG91_CHANNEL` map (SMS/Voice/Email/WhatsApp).
+- Simplified `retryMsg91Otp(reqId)` — it always passes `null` as `retryChannel`, i.e. the widget's default channel. Confirmed against the MSG91 docs: *"The retryChannel is optional if only one retry method is configured in the widget."* Our widget uses SMS only.
+
+### `frontend/src/pages/auth/LoginPage.jsx`
+- "Resend OTP" now calls `retryMsg91Otp(reqId)` (default/SMS channel).
+
+### Captcha
+- No code change needed. With captcha disabled, `Msg91Captcha` never renders its status card (`rendered` stays `false`), so `captchaBlocking` is always `false` and Send OTP is never gated. The component is kept as a no-op so it works automatically if captcha is re-enabled later.
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Phone Login — Full MSG91 Web SDK (Custom UI) + Captcha UI
+
+### What
+Completed the MSG91 **Web SDK for custom UI** integration per the official docs (section *"How to configure Web SDK Custom UI in OTP widget?"*), covering every exposed method and adding a proper captcha UI.
+
+### `frontend/src/services/msg91.js` (expanded)
+- `initMsg91Widget()` config now follows the doc exactly: `{ widgetId, tokenAuth, identifier, exposeMethods: true, captchaRenderId, success, failure }`. The global `success`/`failure` are no-ops (per the doc's note, we listen to per-method callbacks instead to avoid double events).
+- Full method coverage:
+  - `sendMsg91Otp(identifier)` → `window.sendOtp`
+  - `retryMsg91Otp(channel, reqId)` → `window.retryOtp` (exported `MSG91_CHANNEL` = SMS `'11'`, Voice `'4'`, Email `'3'`, WhatsApp `'12'`; `null` for default config)
+  - `verifyMsg91Otp(otp, reqId)` → `window.verifyOtp`
+  - `getMsg91WidgetData()` → `window.getWidgetData` (logged in dev)
+  - `isCaptchaVerified()` → `window.isCaptchaVerified`
+- `reqId` is now threaded through: taken from the `sendOtp` response (`extractMsg91ReqId`) and passed to `retryOtp`/`verifyOtp` (only appended when present, so the widget's internal session id is used otherwise).
+- Kept readiness handling from the previous fix (`waitForExposedMethods`).
+
+### `frontend/src/components/auth/Msg91Captcha.jsx` (new)
+- Owns the DOM element whose id matches `captchaRenderId` so MSG91 can render its reCAPTCHA.
+- Detects when the captcha actually renders (MutationObserver, checks for the injected iframe) — so it stays invisible when captcha is disabled in the widget.
+- Polls `isCaptchaVerified()` and shows a status card: **"Please tick the box to verify you're human"** → **"Verified — you can continue"**.
+- Reports `{ rendered, verified }` up to the parent.
+
+### `frontend/src/pages/auth/LoginPage.jsx`
+- Initializes the widget on mount (deferred with `setTimeout` so React StrictMode's dev double-mount settles on one stable container) instead of only on button click — so the captcha is visible before the user presses Send.
+- Renders `Msg91Captcha`; **Send OTP is disabled until the captcha is solved** (`captchaBlocking`, only when a captcha is actually rendered and reported unverified).
+- Stores `reqId` from `sendOtp` and passes it to `retryOtp` and `verifyOtp`.
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Phone Login — "MSG91 widget is not ready yet" Fix
+
+### Issue
+Clicking **Send OTP** immediately showed *"MSG91 widget is not ready yet. Please try again."*
+
+### Root Cause
+`initMsg91Widget()` called `window.initSendOTP(config)` and returned right away. But with `exposeMethods: true`, MSG91 attaches `window.sendOtp` / `window.verifyOtp` **asynchronously** (it first fetches the widget configuration from MSG91's API). So `isMsg91Initialized()` was still `false` when `sendMsg91Otp()` ran a moment later, and it rejected.
+
+### Fix Applied
+
+**File:** `frontend/src/services/msg91.js`
+1. Added `waitForExposedMethods()` — polls (100ms, 10s timeout) until both `window.sendOtp` and `window.verifyOtp` exist, then resolves.
+2. `initMsg91Widget()` now `await waitForExposedMethods()` before resolving, so callers know the widget is truly ready.
+3. `loadMsg91Widget()` now verifies `window.initSendOTP` actually exists after the script loads, and resets `scriptPromise`/`widgetInitPromise` on failure so a retry is possible (instead of being stuck on a rejected memoized promise).
+4. On timeout the error is now *"MSG91 widget was not ready in time. Please try again."* — a clearer signal that the widget config/token may be wrong.
+
+### If it still fails
+- Verify `VITE_MSG91_WIDGET_ID` and `VITE_MSG91_AUTH_TOKEN` are set and correct (the **OTP Widget token**, not the account authkey).
+- Confirm the widget is **subscribed to the free plan** and configured for **Mobile** in the MSG91 dashboard.
+- If `success`/`failure` or a blocked request appears in the browser console, the widget may be rejecting the token — check the MSG91 **Logs** section.
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Phone Login — Country Code Dropdown (India-only) + Black Input Text
+
+### Changes
+Following up on the MSG91 OTP integration, the login phone field got a country-code selector and readable (black) input text.
+
+**File:** `frontend/src/pages/auth/LoginPage.jsx`
+1. Added a `COUNTRY_CODES` list rendered as a `<select>` next to the phone input. **Only India (+91) is enabled**; the other countries (US, UK, UAE, Australia) render as `disabled` options labeled `(soon)` — so the selector is clearly a country picker but non-Indian numbers can't be chosen.
+2. `normalizePhone(raw, dialCode)` now takes the selected dial code (defaults to `91`); a 10-digit local number is prefixed with `+91` (without the `+`) for MSG91.
+3. Phone input now accepts digits only, max 10, placeholder "Enter mobile number".
+4. Input **text color fixed** — the app's global `body { color: rgba(255,255,255,0.85) }` made typed values white on the white login card. Added `text-gray-900 placeholder:text-gray-400` to both the phone and OTP inputs.
+5. "OTP sent to …" line now shows the full number (`+91 98765 43210`).
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Phone Login — MSG91 OTP Widget (Free OTP Widget) Integration
+
+### Feature
+Added phone-number OTP login using MSG91's OTP Widget (Web SDK with **custom UI** / `exposeMethods`), replacing the old Firebase phone auth (which required reCAPTCHA + a Blaze plan). Google login is untouched.
+
+Per official docs (`https://docs.msg91.com/otp-widget` and `https://msg91.com/help/how-to-integrate-the-new-login-with-otp-widget`):
+1. Widget sends OTP → user enters OTP → widget verifies → returns a JWT **access-token**.
+2. Our backend validates that access-token with MSG91's `POST https://control.msg91.com/api/v5/widget/verifyAccessToken` → gets the verified mobile number.
+3. Backend mints a **Firebase custom token** for that phone; the frontend exchanges it via `signInWithCustomToken()` so the whole existing Firebase-based auth/context flow keeps working.
+
+### Files Added
+- `frontend/src/services/msg91.js` — loads `https://verify.msg91.com/otp-provider.js` (fallback `https://verify.phone91.com/otp-provider.js`), initializes the widget with `exposeMethods: true`, and wraps `sendOtp` / `retryOtp` / `verifyOtp` as promises. Also normalizes the success payload (`extractMsg91Token`) and error messages.
+- `backend/src/services/msg91.js` — `verifyAccessToken(accessToken)` calls MSG91's verify-access-token API with the account `authkey` and returns the verified identifier.
+
+### Files Changed
+- `frontend/src/services/firebase.js` — added `signInWithCustomToken()` (imports Firebase's `signInWithCustomToken`, forces a token refresh).
+- `frontend/src/services/api.js` — added `verifyMsg91AccessToken(accessToken)` → `POST /auth/msg91/verify`.
+- `frontend/src/pages/auth/LoginPage.jsx` — re-enabled the phone section: phone input → **Send OTP** (widget) → OTP input → **Verify OTP** → backend → custom token → Firebase session. Added a `#msg91-captcha` container for the widget captcha and a **Resend OTP** action.
+- `backend/src/services/firebaseAdmin.js` — added `createCustomToken(uid, claims)`.
+- `backend/src/routes/auth.js` — added `POST /auth/msg91/verify`: validates env, verifies the access-token, normalizes the phone, reuses an existing user by phone (or creates `msg91_<phone>`), and returns `{ customToken, phone, isNewUser, user }`.
+- `frontend/.env.example` — added `VITE_MSG91_WIDGET_ID`, `VITE_MSG91_AUTH_TOKEN`.
+- `backend/.env.example` — added `MSG91_AUTHKEY`.
+
+### Required Configuration
+- **MSG91 dashboard** (https://control.msg91.com): create an **OTP Widget**, subscribe to the free plan, set contact point = Mobile, and copy the **Widget ID** + generate an **OTP Widget token**.
+- **Frontend env**: `VITE_MSG91_WIDGET_ID`, `VITE_MSG91_AUTH_TOKEN` (the widget token, *not* the account authkey).
+- **Backend env**: `MSG91_AUTHKEY` (account authkey, used server-side only).
+- **Firebase console**: enable **Custom** sign-in under Authentication → Sign-in method (required for `signInWithCustomToken`).
+
+### Build Status
+✅ **Frontend build successful · Backend syntax check passed**
+## Webhook Self-Test Now Fully Green + Duplicate Payment Indexes Removed
+
+### Issue
+Running `npm run test:webhook` for the first time surfaced two real defects:
+
+1. **Duplicate schema indexes.** `Payment.js` declared `razorpayOrderId` with `unique:true` and `firebaseUid`/`status` with `index:true`, **and** repeated them via `paymentSchema.index({ razorpayOrderId: 1 })` / `{ razorpayPaymentId: 1 }` / `{ firebaseUid: 1, createdAt: -1 }` / `{ status: 1, createdAt: -1 }`. Mongoose logged `Duplicate schema index` warnings on every boot and maintained redundant indexes (extra write cost, doubled index builds).
+2. **A broken assertion in the test itself.** Case 1 "signature over a different body" signed `tampered` and then sent that *same* body — so the signature matched and the server correctly returned 200, failing an assertion that expected 400. The test was wrong, not the server.
+
+### Fix Applied
+- **`backend/src/models/Payment.js`** — removed the `index: true` options on `firebaseUid` and `status`, and removed the two redundant `schema.index()` calls for `razorpayOrderId` and `razorpayPaymentId` (their field-level `unique`/`sparse` definitions already index them). Final indexes: `razorpayOrderId` (unique), `razorpayPaymentId` (sparse), `{ firebaseUid, createdAt }`, `{ status, createdAt }` — covering every query in the codebase with no duplicates.
+- **`backend/test-webhook.mjs`** — the tamper case now signs one body but sends a different one (`signedBody` vs `sentBody`), so it genuinely proves a mismatched signature is rejected.
+
+### Verification
+✅ `cd backend && npm run test:webhook` → **18 passed, 0 failed** (`ALL GREEN`), test data self-cleaned
+✅ Zero `Duplicate schema index` warnings on boot
+✅ `cd backend && npm test` → 15 passed, 0 failed
+
+### Build Status
+✅ **Webhook end-to-end self-test green · No duplicate indexes**
+
+---
+
+## Payment Recovery & Double-Charge Guard — Closing the "Paid But Not Activated" Gap
+
+### Issue
+The previous overhaul added a ledger and made the webhook verify correctly, but two gaps remained:
+
+1. **No recovery for captured-but-unactivated payments.** If the browser closed before `/verify` **and** the webhook never arrived (`RAZORPAY_WEBHOOK_SECRET` still unset, or a delivery failure), money was captured in Razorpay while the ledger row sat at `status:'created'` forever. Nothing ever reconciled it, and nothing told the member.
+2. **A returning member could be charged twice.** `PaymentPage` offered a fresh checkout with no awareness of a prior in-flight order, so a member who had already paid (but not been activated) was invited to pay again.
+
+### Fix Applied
+
+**New file:** `backend/src/services/paymentSettlement.js`
+- Extracted the settlement primitives (`PLANS`, `CURRENCY`, `DEFAULT_PLAN`, `getRazorpay`, `resetRazorpay`, `safeEqual`, `appendEvent`, `activateSubscription`, `resolveUserForOrder`) plus a single `settleCapturedPayment({ orderId, payment, via })`.
+- `/verify`, the webhook, **and** reconciliation now all settle through this one function, so recovery produces byte-for-byte the same end state as a normal payment. Purely a refactor — behaviour preserved (`npm test` still 15/15).
+
+**New file:** `backend/src/services/reconcile.js`
+- `reconcileStuckPayments({ olderThanMinutes, limit, dryRun })` — finds ledger rows at `status:'created'` older than the cutoff, asks Razorpay `orders.fetchPayments(orderId)` for the truth, and:
+  - finds a `captured` payment → settles it via `settleCapturedPayment(..., via:'admin')` (idempotent, so concurrent runs are safe);
+  - finds only `failed` payments → marks the row `failed`;
+  - finds nothing → leaves it `abandoned`.
+- `reconcileForUser(firebaseUid, …)` — the same logic **scoped to one member**, bounded to 3 orders and **never throws**.
+
+**New file:** `backend/src/routes/adminPayments.js` — thin admin/cron surface:
+- `GET|POST /api/admin/payments/reconcile` (query `olderThanMinutes`, `limit`, `dryRun`).
+- `GET /api/admin/payments/stuck` — read-only visibility of stuck orders.
+- Auth accepts **either** `Authorization: Bearer ${CRON_SECRET}` (for a scheduler) **or** a logged-in admin's Firebase token with `role:'admin'`.
+
+**`backend/src/routes/payments.js`**
+- `GET /payments/my` now runs `reconcileForUser(req.user.uid)` **before** returning history. This deliberately puts recovery exactly where it matters — the moment the member opens their payments, which is also the moment `PaymentPage` calls it. No scheduler required, and it works on any Vercel plan (Hobby restricts cron frequency, so a mandatory cron would have been a deploy risk).
+
+**`backend/src/server.js`**
+- Mounts `adminPaymentsRoutes` at `/api/admin/payments` **before** the generic `/api/admin` router.
+
+**New file:** `frontend/src/services/api.js` → `getMyPayments()`.
+
+**`frontend/src/pages/payment/PaymentPage.jsx` — double-charge guard**
+- On load (when not already live) it polls up to 5× (3s apart): calls `getMyPayments()` (which triggers server-side reconcile) **and** re-reads the freshest entitlement via `refreshProfile()`. The profile refresh is essential — otherwise a successful server-side reconcile would leave the local profile stale and the guard would re-offer checkout.
+- If the term became live → redirect to `/payment/success`; if still unsettled after the polls → show an amber "you have a payment we're still confirming" banner and relabel the CTA **"Pay again anyway"**. Fail-open: any error clears the guard so checkout is never blocked.
+- `refreshProfile` is held in a `useRef` (it is re-created on every `AuthProvider` render).
+
+**`backend/.env.example`**
+- Documented optional `CRON_SECRET` and the reconcile endpoints; noted that per-user recovery is automatic.
+
+### Design note
+Recovery is intentionally **lazy and per-user** rather than cron-only: the member returning to the payment page is precisely the moment a stuck capture is dangerous, so settling it there removes the double-charge risk at the source while requiring no scheduler and no plan upgrade. The bulk admin/cron endpoint remains available for a proactive sweep.
+
+### Verification
+✅ `node --check` clean on `payments.js`, `adminPayments.js`, `paymentSettlement.js`, `reconcile.js`, `server.js`
+✅ Full server module graph imports cleanly (`VERCEL=1`)
+✅ `cd backend && npm test` → **15 passed, 0 failed** (refactor is behaviour-neutral)
+✅ `cd frontend && npm run build` → built successfully, no errors
+
+### Build Status
+✅ **Frontend build successful · Backend syntax check passed · Service refactor verified behaviour-neutral**
+
+---
+
+## Payment Security Overhaul — Razorpay Webhook Was Never Verifying Anything
+
+### Issue
+The Razorpay webhook endpoint existed and looked correct, but **had never verified a single event**. `RAZORPAY_WEBHOOK_SECRET` was declared in `backend/.env.example` but never added to `backend/.env`, so every delivery hit the "secret not set" branch, logged an error, and returned **HTTP 200 `{status:'ignored'}`**. Razorpay read that as a successful delivery and stopped retrying.
+
+Confirmed from `backend/logs/`: `POST /api/payments/webhook` = **0 hits** across all 8 log files (including 3 `.gz` archives), while `create-order`/`verify` = 3 hits.
+
+**Impact:** payment verification depended *entirely* on the browser calling `/verify`. If the tab closed, crashed, or lost network after Razorpay captured the money, the member was charged and never activated. No recovery path.
+
+Five further defects were found while tracing the flow end to end:
+
+| # | Severity | Defect |
+|---|---|---|
+| 1 | **Critical** | `/verify` never checked the order belonged to the caller → **free membership for any signed-in user** |
+| 2 | **Critical** | `create-order` wrote `status:'pending'` unconditionally → **active members lost access** the moment renewal checkout opened |
+| 3 | **Critical** | Webhook resolved the payer via the single mutable `subscription.razorpayOrderId` → **delayed webhooks orphaned** once a second order existed |
+| 4 | **High** | Webhook returned HTTP 200 on internal error → DB failures **silently discarded**, no retry |
+| 5 | **High** | `refund.processed` / `charge.dispute.created` unhandled → **refunded members kept access forever** |
+
+Plus: non-constant-time signature comparison, unguarded `rawBody`, unguarded `RAZORPAY_KEY_SECRET`, no currency check, no rate limiting, `plan` request field ignored, and `backend/.env` not excluded from Vercel uploads.
+
+### Fix Applied
+
+**New file:** `backend/src/models/Payment.js`
+- Immutable one-row-per-order ledger: `razorpayOrderId` (unique), `razorpayPaymentId`, `userId`, `firebaseUid`, `amount`, `currency`, `plan`, `status` (`created → captured | failed | partially_refunded | refunded | disputed`), `capturedAt`, `refundedAt`, `refundId`, `disputeId`, `activatedVia`, and an append-only `events[]` audit trail.
+- Indexes on `razorpayOrderId`, `razorpayPaymentId`, `{firebaseUid, createdAt}`, `{status, createdAt}`.
+
+**New file:** `backend/src/utils/subscription.js`
+- `isSubscriptionLive()` / `daysUntilExpiry()` / `nextTermStart()` / `addYears()` — single source of truth for entitlement, so the scan gate and the UI stop disagreeing.
+- `nextTermStart()` extends a live membership from its existing `endDate`, so **renewing early no longer destroys paid-for days**.
+
+**New file:** `backend/test-subscription.mjs` (+ `npm test` in `backend/package.json`)
+- 15 assertions covering expiry boundaries, legacy records with no `endDate`, and renewal chaining. Run with `cd backend && npm test`.
+
+**`backend/src/routes/payments.js`** — rewritten:
+1. **Missing secret → HTTP 500**, not 200. Non-2xx makes Razorpay retry, so events queued during the outage still settle once the secret is added.
+2. **`safeEqual()`** — `crypto.timingSafeEqual` with a length guard replaces `!==` on both `/verify` and the webhook.
+3. **`rawBodyBuffer()`** — normalises Buffer/string/`undefined`; missing raw body returns 400 instead of throwing into the catch.
+4. **Fix #1 — order ownership (Layer 3).** `/verify` now loads the ledger row for the order and requires `paymentDoc.firebaseUid === req.user.uid`, else **403**. This closes the free-membership hole: the `(order_id, payment_id, signature)` triple in the payer's browser is no longer replayable against another account.
+5. **Fix #2 — renewal no longer revokes.** `create-order` only sets `pending` when `!isSubscriptionLive(user.subscription)`.
+6. **Fix #3 — ledger-backed webhook lookup.** `resolveUserForOrder()` queries `Payment` by `razorpayOrderId`, falling back to the legacy `subscription.razorpayOrderId` field so orders created *before* this deploy still settle. New orders no longer overwrite that field.
+7. **Fix #4 — real failures return 500** so Razorpay retries. Only genuinely unrecoverable cases (`user_not_found`) return 200.
+8. **Fix #5 — refunds & disputes.** `refund.processed` marks the ledger `refunded`/`partially_refunded` and revokes the membership only on a **full** refund of the payment currently backing it (partial refunds and superseded payments retain access). `charge.dispute.created` revokes immediately.
+9. **`plan` catalogue** (`PLANS`) replaces the hardcoded `PLAN_AMOUNT`; the request `plan` is whitelisted, never trusted for amount.
+10. **Currency check** added alongside the amount check.
+11. **`membershipId`** widened from 8 to 12 hex chars of the ObjectId (32 → 48 bits) to make `unique`-index collisions negligible. Existing IDs untouched.
+12. **Rate limiting** on `/create-order` (10/min) and `/verify` (20/min), with Map cleanup.
+13. **`RAZORPAY_KEY_SECRET` guarded** before use → 503 with a clear message instead of a 500 TypeError.
+14. **`order.paid` acknowledged but never grants** — it can arrive before capture; only `payment.captured` activates.
+15. **`GET /payments/my`** — member-visible payment history (50 most recent).
+
+**`backend/src/server.js`**
+- The webhook's raw bytes are now captured by a dedicated `express.raw({ type: '*/*' })` mounted on `/api/payments/webhook`, which also JSON-parses the buffer so `req.body` stays an object. The old `express.json({ verify })` hook **only fires for `application/json`**, so any other content type left `rawBody` undefined. The global JSON parser now skips that path.
+- JSON limit tightened `10mb → 2mb` (verified no route accepts uploads or base64 — all media is URL-referenced).
+
+**`backend/src/routes/entries.js`**
+- Scan gate now uses `isSubscriptionLive()` instead of `status === 'active'`, which **ignored `endDate`** — a lapsed membership scanned in forever. Self-heals `status → 'inactive'` on first attempt. A missing `endDate` is still treated as live, so legacy records are unaffected.
+
+**Frontend** — `frontend/src/utils/subscription.js` (new, mirrors the backend helper) plus:
+- `PaymentPage.jsx` — redirects to `/card` only on a **live** term, so a lapsed member can renew. Verification failures now say the payment was received and will activate, instead of implying a retry.
+- `PaymentSuccessPage.jsx` — polls up to 8× until the profile is live before redirecting, showing a "payment received, still confirming" state instead of bouncing into an inactive card screen. Holds `refreshProfile` in a ref because it is re-created on every `AuthProvider` render.
+- `CardPage`, `ProfilePage`, `VenueDetailPage`, `Navbar`, `LoginPage`, `SubscriptionRoute` — entitlement checks switched from `status === 'active'` to `isSubscriptionLive()`. `AdminUsersPage` intentionally still shows the **raw** stored status (admin data view).
+
+**`.vercelignore`** — now excludes `.env*` (with `!.env.example`). Previously only `.gitignore` covered them, so a `vercel --prod` CLI upload would have shipped `backend/.env` — live Razorpay key secret included — inside the function bundle.
+
+**`vercel.json`** — explicit `/api/payments/webhook` rewrite ahead of the generic catch-all.
+
+### Verification
+
+✅ Frontend build successful (495 modules)
+✅ `node --check` clean on all 5 touched backend files; full server module graph imports without error
+✅ **Live webhook test against a running server** (temp secret, port 5099):
+
+| Case | Result |
+|---|---|
+| No signature header | `400 Missing signature header` ✅ |
+| Wrong signature | `400 Invalid webhook signature` ✅ |
+| Valid signature over **tampered** body | `400 Invalid webhook signature` ✅ |
+| Valid signature, `application/json` | `200` — verified ✅ |
+| Valid signature, `text/plain;charset=UTF-8` | `200` — verified ✅ *(old code returned 200 `status:'error'`)* |
+| Valid signature, `application/octet-stream` | `200` — verified ✅ |
+| Valid signature, content-type header omitted | `200` — verified ✅ |
+| `/verify`, `/create-order`, `/payments/my` unauthenticated | `401 No token provided` ✅ |
+
+✅ `cd backend && npm test` → **15 passed, 0 failed**
+
+### ⚠️ ACTION REQUIRED — the webhook is live but not yet configured
+`RAZORPAY_WEBHOOK_SECRET` is still **not set**. Until it is, every webhook returns 500 and no membership is granted via webhook.
+
+In Razorpay Dashboard → **Settings → Webhooks**:
+1. **Webhook URL:** `https://kulty.in/api/payments/webhook`
+2. **Secret:** generate one, then add to `backend/.env` → `RAZORPAY_WEBHOOK_SECRET=<secret>`
+3. **Active events:** `payment.captured`, `payment.failed`, `refund.processed`, `charge.dispute.created`
+4. Set the same secret as a Vercel production env var.
+
+Then confirm delivery: Razorpay Dashboard → Webhooks → the endpoint should show **200** deliveries, and `backend/logs/combined-*.log` will contain `Razorpay webhook event: payment.captured`.
+
+### Build Status
+✅ **Frontend build successful · Backend syntax check passed · Live webhook verification test passed**
+
+---
+
+## Homepage Hero Events Stat — Shows Total Event Count, Not Just Upcoming
+
+### Issue
+The hero's "Events" stat showed the total of *upcoming* events only. Requirement: the hero stat should show the total event count (all events, including past), while the "Upcoming Events" section below still lists only upcoming events.
+
+### Fix Applied
+
+**File:** `frontend/src/pages/user/HomePage.jsx`
+- Kept `getEvents({ status: 'upcoming', limit: 4 })` for the "Upcoming Events" section list.
+- Added a lightweight `getEvents({ limit: 1 })` call whose `total` drives the hero "Events" stat — so the hero shows the real count of all events while the section below stays upcoming-only.
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Homepage Hero Stats — Shows Real Totals Instead of Placeholder Counts
+
+### Issue
+The hero section's stats row showed a hardcoded `100+` for Events (and `50+` for Venues as a fallback), or the length of the currently-fetched slice (e.g. `4+`) — not the real number of events/venues.
+
+### Fix Applied
+
+**File:** `frontend/src/pages/user/HomePage.jsx`
+1. Added `venueTotal` and `eventTotal` state.
+2. `fetchVenues` now stores the API's `total` venue count; the events fetch stores the API's `total` (upcoming) event count.
+3. `HeroSection` now takes `venueTotal`/`eventTotal` props and renders the actual totals (falling back to `50+`/`100+` only while data hasn't loaded yet).
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Past Events No Longer Shown as Upcoming
+
+### Issue
+Events whose date had already passed still appeared under "Upcoming Events" (and under the "All"/"Upcoming" tabs on the Events page) with an `upcoming` badge. This happened because `status` defaults to `upcoming` and is only set to `past` if an admin manually updates it — so stale stored statuses kept old events looking upcoming forever.
+
+### Fix Applied
+
+**File:** `backend/src/routes/events.js`
+1. Added `effectiveStatus(event)` helper — derives the true status from the event date: any event with a date before today is `past`, regardless of the stale stored value.
+2. **List route (`GET /events`)**:
+   - Fire-and-forget self-heal: `Event.updateMany({ date: { $lt: startOfToday }, status: { $ne: 'past' } }, { status: 'past' })` fixes the DB so every consumer sees the correct status.
+   - The `status` filter now also accounts for the date (via `$and` conditions), so `upcoming` excludes past-dated events and `past` includes them — even before the self-heal write lands.
+   - Every returned event gets its status overridden with the effective status.
+3. **Single route (`GET /events/:id`)** — persists the corrected status on the document when stale.
+
+**File:** `frontend/src/pages/user/HomePage.jsx`
+- "Upcoming Events" section now calls `getEvents({ status: 'upcoming', limit: 4 })` so past events never appear there.
+
+### Build Status
+✅ **Frontend build successful · Backend syntax check passed**
+
+---
+
 ## Venue Owner Flow — Existing Members No Longer Tagged as Venue Owners
 
 ### Issue

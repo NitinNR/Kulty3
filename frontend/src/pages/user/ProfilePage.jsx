@@ -5,6 +5,7 @@ import { BottomNav } from '../../components/layout/BottomNav';
 import { MembershipCard } from '../../components/card/MembershipCard';
 import { format } from 'date-fns';
 import { CreditCard, LogOut, CalendarDays, Clock, ChevronRight, Receipt, Sparkles, ArrowRight } from 'lucide-react';
+import { isSubscriptionLive } from '../../utils/subscription';
 
 const T = {
   bg:       '#0d0d0d',
@@ -21,7 +22,7 @@ export const ProfilePage = () => {
 
   if (!profile) return null;
 
-  const isActive = profile.subscription?.status === 'active';
+  const isActive = isSubscriptionLive(profile.subscription);
 
   return (
     <div className="min-h-screen flex flex-col pb-20 md:pb-0" style={{ backgroundColor: T.bg }}>

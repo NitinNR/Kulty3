@@ -39,3 +39,16 @@ export const verifyIdToken = async (token) => {
     throw new Error('Invalid token');
   }
 };
+
+// Mints a Firebase custom token so a non-Firebase sign-in (e.g. MSG91 phone OTP)
+// can be exchanged for a real Firebase session on the client.
+export const createCustomToken = async (uid, claims = {}) => {
+  try {
+    const auth = initFirebase();
+    const token = await auth.createCustomToken(uid, claims);
+    return token;
+  } catch (error) {
+    logger.error('Custom token creation failed:', { error: error.message, stack: error.stack });
+    throw new Error('Failed to create custom token');
+  }
+};

@@ -1,205 +1,409 @@
 import express from 'express';
-import Razorpay from 'razorpay';
 import User from '../models/User.js';
+import Payment from '../models/Payment.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import crypto from 'crypto';
 import logger from '../config/logger.js';
+import { isSubscriptionLive } from '../utils/subscription.js';
+import {
+  PLANS,
+  DEFAULT_PLAN,
+  CURRENCY,
+  getRazorpay,
+  safeEqual,
+  appendEvent,
+  settleCapturedPayment,
+} from '../services/paymentSettlement.js';
+import { reconcileForUser } from '../services/reconcile.js';
 
 const router = express.Router();
 
-const PLAN_AMOUNT = 99900; // ₹999 in paise
+// ── helpers ──────────────────────────────────────────────────────────────────
 
-let razorpay = null;
-const getRazorpay = () => {
-  if (!razorpay) {
-    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-      throw new Error('Razorpay keys not configured');
-    }
-    razorpay = new Razorpay({
-      key_id:     process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
-  }
-  return razorpay;
+/**
+ * Coerces whatever body parser produced into the exact bytes Razorpay signed.
+ * `rawBody` is a Buffer when captured, but may be a string or already-parsed
+ * object if middleware ordering changes — normalise all three.
+ */
+const rawBodyBuffer = (req) => {
+  const { rawBody } = req;
+  if (Buffer.isBuffer(rawBody)) return rawBody;
+  if (typeof rawBody === 'string') return Buffer.from(rawBody, 'utf8');
+  return null;
 };
 
-// Helper — activate subscription on a user document (shared by /verify and webhook)
-const activateSubscription = (user, { orderId, paymentId, capturedAt }) => {
-  if (!user.membershipId) {
-    user.membershipId = `KULTY${user._id.toString().slice(-8).toUpperCase()}`;
-  }
-  // Always refresh QR data on a new payment so old screenshots stop working
-  user.qrCodeData = crypto.randomUUID();
-
-  const startDate = capturedAt ? new Date(capturedAt * 1000) : new Date();
-  const endDate   = new Date(startDate);
-  endDate.setFullYear(endDate.getFullYear() + 1);
-
-  user.subscription = {
-    status:             'active',
-    plan:               'annual',
-    startDate,
-    endDate,
-    razorpayOrderId:    orderId,
-    razorpayPaymentId:  paymentId,
+/** Simple in-memory throttle — enough to stop order-spam / verify brute force. */
+const rateLimit = (windowMs, max) => {
+  const hits = new Map();
+  return (req, res, next) => {
+    const key = req.user?.uid || req.ip;
+    const now = Date.now();
+    const entry = hits.get(key);
+    if (!entry || now > entry.resetAt) {
+      hits.set(key, { count: 1, resetAt: now + windowMs });
+    } else {
+      entry.count += 1;
+      if (entry.count > max) {
+        logger.warn('payment rate limit hit', { key, path: req.path });
+        return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
+      }
+    }
+    // Opportunistic cleanup so the Map cannot grow without bound.
+    if (hits.size > 5000) {
+      for (const [k, v] of hits) if (now > v.resetAt) hits.delete(k);
+    }
+    next();
   };
 };
 
 // ── POST /payments/create-order ───────────────────────────────────────────────
-router.post('/create-order', authenticateToken, async (req, res) => {
-  try {
-    const rzp   = getRazorpay();
-    const order = await rzp.orders.create({
-      amount:          PLAN_AMOUNT,
-      currency:        'INR',
-      receipt:         `rcpt_${Date.now()}`,
-      payment_capture: 1,
-    });
+router.post(
+  '/create-order',
+  authenticateToken,
+  rateLimit(60_000, 10),
+  async (req, res) => {
+    try {
+      const plan    = PLANS[req.body?.plan] ? req.body.plan : DEFAULT_PLAN;
+      const planCfg = PLANS[plan];
 
-    // Store orderId on the user so the webhook can find them later
-    await User.findOneAndUpdate(
-      { firebaseUid: req.user.uid },
-      { 'subscription.razorpayOrderId': order.id, 'subscription.status': 'pending' }
-    );
+      // req.user is a decoded Firebase token — it carries `uid`, not a Mongo
+      // `_id`, so the local document is needed for the ledger's ref.
+      const user = await User.findOne({ firebaseUid: req.user.uid });
+      if (!user) return res.status(404).json({ error: 'User not found' });
 
-    res.json({ id: order.id, amount: order.amount, currency: order.currency });
-  } catch (err) {
-    logger.error('create-order error:', { error: err.message, stack: err.stack });
-    res.status(500).json({ error: 'Failed to create order' });
+      const rzp   = getRazorpay();
+      const order = await rzp.orders.create({
+        amount:          planCfg.amount,
+        currency:        CURRENCY,
+        receipt:         `rcpt_${Date.now()}`,
+        payment_capture: 1,
+        notes:           { firebaseUid: req.user.uid, plan },
+      });
+
+      // Write the ledger row FIRST — it is the only durable link between this
+      // order and this user, and both /verify and the webhook depend on it.
+      await Payment.create({
+        razorpayOrderId: order.id,
+        userId:          user._id,
+        firebaseUid:     req.user.uid,
+        amount:          order.amount,
+        currency:        order.currency,
+        plan,
+        receipt:         order.receipt,
+        status:          'created',
+      });
+
+      // Only mark the user pending when they are NOT already a live member.
+      // Unconditionally writing 'pending' here used to revoke an active
+      // membership the moment the renewal checkout opened.
+      if (!isSubscriptionLive(user.subscription)) {
+        user.subscription.status          = 'pending';
+        user.subscription.razorpayOrderId = order.id;
+        await user.save();
+      }
+
+      res.json({ id: order.id, amount: order.amount, currency: order.currency });
+    } catch (err) {
+      logger.error('create-order error:', { error: err.message, stack: err.stack });
+      res.status(500).json({ error: 'Failed to create order' });
+    }
   }
-});
+);
 
 // ── POST /payments/verify ─────────────────────────────────────────────────────
-// Called by the frontend Razorpay checkout handler after user pays.
-// Two-layer check: (1) HMAC signature, (2) live Razorpay API fetch.
-router.post('/verify', authenticateToken, async (req, res) => {
-  try {
-    const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
+// Called by the frontend Razorpay checkout handler after the user pays.
+// Layer 1: HMAC signature (proves Razorpay generated this callback).
+// Layer 2: live fetch from Razorpay (proves the money actually moved).
+// Layer 3: ledger ownership (proves THIS user is the one who paid).
+router.post(
+  '/verify',
+  authenticateToken,
+  rateLimit(60_000, 20),
+  async (req, res) => {
+    try {
+      const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body || {};
 
-    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
-      return res.status(400).json({ error: 'Missing payment fields' });
+      if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+        return res.status(400).json({ error: 'Missing payment fields' });
+      }
+      if (!process.env.RAZORPAY_KEY_SECRET) {
+        logger.error('RAZORPAY_KEY_SECRET not set — cannot verify payment');
+        return res.status(503).json({ error: 'Payment verification unavailable' });
+      }
+
+      // ── Layer 1: HMAC signature ──────────────────────────────────────────
+      const expected = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+        .digest('hex');
+
+      if (!safeEqual(expected, razorpaySignature)) {
+        logger.warn('verify: signature mismatch', { razorpayOrderId });
+        return res.status(400).json({ error: 'Invalid payment signature' });
+      }
+
+      // ── Layer 2: live Razorpay state ─────────────────────────────────────
+      const rzp     = getRazorpay();
+      const payment = await rzp.payments.fetch(razorpayPaymentId);
+
+      if (payment.status !== 'captured') {
+        return res.status(400).json({ error: 'Payment not captured' });
+      }
+      if (payment.order_id !== razorpayOrderId) {
+        return res.status(400).json({ error: 'Order ID mismatch' });
+      }
+      if (payment.currency !== CURRENCY) {
+        return res.status(400).json({ error: 'Payment currency mismatch' });
+      }
+
+      // ── Layer 3: this order must belong to this user ─────────────────────
+      // Without this check any signed-in user could replay another member's
+      // (order_id, payment_id, signature) triple — which the payer's browser
+      // receives in plaintext — and activate a free membership.
+      const paymentDoc = await Payment.findOne({ razorpayOrderId });
+      if (!paymentDoc) {
+        logger.warn('verify: no ledger entry for order', { razorpayOrderId });
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      if (paymentDoc.firebaseUid !== req.user.uid) {
+        logger.error('verify: order ownership mismatch', {
+          razorpayOrderId,
+          ownerUid: paymentDoc.firebaseUid,
+          callerUid: req.user.uid,
+        });
+        return res.status(403).json({ error: 'Order does not belong to this account' });
+      }
+
+      const user = paymentDoc.userId
+        ? await User.findById(paymentDoc.userId)
+        : await User.findOne({ firebaseUid: req.user.uid });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      // Settlement (amount check, activation, ledger) is shared with the
+      // webhook and reconciliation so all three produce identical state.
+      const result = await settleCapturedPayment({
+        orderId: razorpayOrderId,
+        payment,
+        via: 'verify',
+        user,
+        paymentDoc,
+      });
+
+      if (result.action === 'amount_mismatch') {
+        return res.status(400).json({ error: 'Payment amount mismatch' });
+      }
+
+      res.json({ message: 'Payment verified and subscription activated', action: result.action });
+    } catch (err) {
+      logger.error('verify error:', { error: err.message, stack: err.stack });
+      res.status(500).json({ error: 'Failed to verify payment' });
     }
-
-    // ── Layer 1: HMAC signature (proves Razorpay generated this callback) ──
-    const expected = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
-      .digest('hex');
-
-    if (expected !== razorpaySignature) {
-      return res.status(400).json({ error: 'Invalid payment signature' });
-    }
-
-    // ── Layer 2: Fetch live payment from Razorpay API ──────────────────────
-    const rzp     = getRazorpay();
-    const payment = await rzp.payments.fetch(razorpayPaymentId);
-
-    if (payment.status !== 'captured') {
-      return res.status(400).json({ error: 'Payment not captured' });
-    }
-    if (payment.amount !== PLAN_AMOUNT) {
-      return res.status(400).json({ error: 'Payment amount mismatch' });
-    }
-    if (payment.order_id !== razorpayOrderId) {
-      return res.status(400).json({ error: 'Order ID mismatch' });
-    }
-
-    // ── Idempotency: already processed this exact payment ─────────────────
-    const user = await User.findOne({ firebaseUid: req.user.uid });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    if (
-      user.subscription?.status === 'active' &&
-      user.subscription?.razorpayPaymentId === razorpayPaymentId
-    ) {
-      return res.json({ message: 'Already activated', user });
-    }
-
-    // ── Activate ───────────────────────────────────────────────────────────
-    activateSubscription(user, {
-      orderId:     razorpayOrderId,
-      paymentId:   razorpayPaymentId,
-      capturedAt:  payment.created_at,
-    });
-    await user.save();
-
-    res.json({ message: 'Payment verified and subscription activated', user });
-  } catch (err) {
-    logger.error('verify error:', { error: err.message, stack: err.stack });
-    res.status(500).json({ error: 'Failed to verify payment' });
   }
-});
+);
 
 // ── POST /payments/webhook ────────────────────────────────────────────────────
-// Razorpay → your server. Authoritative fallback — handles cases where the
-// user's browser closed before the frontend handler could call /verify.
-// Signature is HMAC-SHA256(rawBody, RAZORPAY_WEBHOOK_SECRET).
+// Razorpay → our server. This is the AUTHORITATIVE settlement path: if the
+// browser closes before /verify lands, the money is still captured here.
+// Signature = HMAC-SHA256(raw request bytes, RAZORPAY_WEBHOOK_SECRET).
 router.post('/webhook', async (req, res) => {
+  // Any throw from here must surface as a non-2xx so Razorpay retries.
   try {
-    const signature     = req.headers['x-razorpay-signature'];
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-
     if (!webhookSecret) {
-      logger.error('RAZORPAY_WEBHOOK_SECRET not set — webhook ignored');
-      return res.status(200).json({ status: 'ignored' });
+      // Previously this returned 200 {status:'ignored'}, which told Razorpay
+      // "delivered fine" and silently discarded the event forever.
+      logger.error('RAZORPAY_WEBHOOK_SECRET not set — webhook cannot be verified');
+      return res.status(500).json({ status: 'error', message: 'Webhook secret not configured' });
     }
+
+    const signature = req.headers['x-razorpay-signature'];
     if (!signature) {
       return res.status(400).json({ error: 'Missing signature header' });
     }
 
-    // req.rawBody is set by the express.json verify callback in server.js
-    const expected = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(req.rawBody)
-      .digest('hex');
+    const body = rawBodyBuffer(req);
+    if (!body) {
+      logger.error('webhook: raw body unavailable — signature cannot be verified');
+      return res.status(400).json({ error: 'Raw body unavailable' });
+    }
 
-    if (expected !== signature) {
+    const expected = crypto.createHmac('sha256', webhookSecret).update(body).digest('hex');
+    if (!safeEqual(expected, signature)) {
+      logger.warn('webhook: signature mismatch', {
+        event: req.body?.event,
+        path: req.originalUrl,
+      });
       return res.status(400).json({ error: 'Invalid webhook signature' });
     }
 
-    const event = req.body;
-    logger.info('Razorpay webhook event:', event.event);
+    const event = req.body || {};
+    const eventName = event.event;
+    logger.info('Razorpay webhook event:', eventName);
 
-    if (event.event === 'payment.captured') {
-      const payment = event.payload.payment.entity;
-      const orderId  = payment.order_id;
-      const paymentId = payment.id;
+    const entityOf = () => event.payload?.payment?.entity || {};
 
-      // Sanity-check amount
-      if (payment.amount !== PLAN_AMOUNT) {
-        logger.warn(`Webhook amount mismatch: expected ${PLAN_AMOUNT}, got ${payment.amount}`);
-        return res.status(200).json({ status: 'amount_mismatch' });
+    // ── payment.captured — grant the membership ────────────────────────────
+    // Only this event is authoritative. `order.paid` also fires and may arrive
+    // before the money is actually captured, so it is acknowledged below
+    // without granting anything.
+    if (eventName === 'payment.captured') {
+      const payment = entityOf();
+      if (!payment?.id || !payment?.order_id) {
+        return res.status(200).json({ status: 'ignored_event' });
       }
 
-      // Find the user by the orderId stored at create-order time
-      const user = await User.findOne({ 'subscription.razorpayOrderId': orderId });
-      if (!user) {
-        logger.warn(`Webhook: no user found for orderId ${orderId}`);
+      const result = await settleCapturedPayment({
+        orderId: payment.order_id,
+        payment,
+        via: 'webhook',
+      });
+
+      if (result.action === 'user_not_found') {
+        // The order predates the ledger and belongs to no one we know.
+        // Retrying cannot invent a user, so this must not loop.
+        logger.error(`Webhook: no user found for orderId ${payment.order_id}`);
         return res.status(200).json({ status: 'user_not_found' });
       }
-
-      // Idempotency
-      if (
-        user.subscription?.status === 'active' &&
-        user.subscription?.razorpayPaymentId === paymentId
-      ) {
+      if (result.action === 'amount_mismatch') {
+        return res.status(200).json({ status: 'amount_mismatch' });
+      }
+      if (result.action === 'already_processed') {
         return res.status(200).json({ status: 'already_processed' });
       }
 
-      activateSubscription(user, {
-        orderId,
-        paymentId,
-        capturedAt: payment.created_at,
+      logger.info(`Webhook activated subscription for user ${result.userId}`, {
+        orderId: payment.order_id,
+        paymentId: payment.id,
       });
-      await user.save();
-      logger.info(`Webhook activated subscription for user ${user._id}`);
+      return res.status(200).json({ status: 'ok', action: 'activated' });
     }
 
-    res.status(200).json({ status: 'ok' });
+    // ── payment.failed — record it, nothing to grant ───────────────────────
+    if (eventName === 'payment.failed') {
+      const payment = entityOf();
+      if (payment?.order_id) {
+        await Payment.findOneAndUpdate(
+          { razorpayOrderId: payment.order_id },
+          {
+            status: 'failed',
+            failedAt: new Date(),
+            $push: { events: { event: eventName, at: new Date() } },
+          }
+        );
+      }
+      logger.warn('Webhook: payment failed', { orderId: payment?.order_id });
+      return res.status(200).json({ status: 'ok', action: 'payment_failed' });
+    }
+
+    // ── refund.processed — revoke if the membership was paid for by it ─────
+    if (eventName === 'refund.processed') {
+      const refund  = event.payload?.refund?.entity || {};
+      const payment = await Payment.findOne({ razorpayPaymentId: refund.payment_id });
+
+      if (!payment) {
+        logger.warn('Webhook: refund for unknown payment', { paymentId: refund.payment_id });
+        return res.status(200).json({ status: 'ok', action: 'refund_unmatched' });
+      }
+
+      const isFullRefund = Number(refund.amount) === Number(payment.amount);
+      // A partial refund must not clobber `captured` — the term is still valid.
+      payment.status     = isFullRefund ? 'refunded' : 'partially_refunded';
+      payment.refundId   = refund.id;
+      payment.refundedAt = new Date();
+      appendEvent(payment, eventName, 'webhook');
+      await payment.save();
+
+      const user = payment.userId
+        ? await User.findById(payment.userId)
+        : await User.findOne({ firebaseUid: payment.firebaseUid });
+
+      if (!user) {
+        return res.status(200).json({ status: 'ok', action: 'refund_recorded_no_user' });
+      }
+
+      // Only revoke when (a) the whole amount came back and (b) this payment
+      // is still the one backing the live membership.
+      if (isFullRefund && user.subscription?.razorpayPaymentId === refund.payment_id) {
+        user.subscription.status = 'inactive';
+        await user.save();
+        logger.error('Webhook: membership revoked due to full refund', {
+          userId: user._id,
+          refundId: refund.id,
+        });
+        return res.status(200).json({ status: 'ok', action: 'refunded_and_revoked' });
+      }
+
+      if (!isFullRefund) {
+        logger.warn('Webhook: partial refund recorded, membership retained', {
+          paymentId: refund.payment_id,
+          amount: refund.amount,
+        });
+        return res.status(200).json({ status: 'ok', action: 'refunded_partial' });
+      }
+
+      // Full refund of an older/superseded payment — the current term stands.
+      logger.warn('Webhook: full refund for superseded payment, membership retained', {
+        paymentId: refund.payment_id,
+        activePaymentId: user.subscription?.razorpayPaymentId,
+      });
+      return res.status(200).json({ status: 'ok', action: 'refunded_superseded' });
+    }
+
+    // ── charge.dispute.created — revoke immediately ────────────────────────
+    if (eventName === 'charge.dispute.created') {
+      const dispute = event.payload?.dispute?.entity || {};
+      const payment = await Payment.findOne({ razorpayPaymentId: dispute.payment_id });
+
+      if (payment) {
+        payment.status   = 'disputed';
+        payment.disputeId = dispute.id;
+        appendEvent(payment, eventName, 'webhook');
+        await payment.save();
+
+        const user = payment.userId
+          ? await User.findById(payment.userId)
+          : await User.findOne({ firebaseUid: payment.firebaseUid });
+
+        if (user && user.subscription?.razorpayPaymentId === dispute.payment_id) {
+          user.subscription.status = 'inactive';
+          await user.save();
+          logger.error('Webhook: membership revoked due to dispute', {
+            userId: user._id,
+            disputeId: dispute.id,
+          });
+        }
+      }
+      return res.status(200).json({ status: 'ok', action: 'disputed' });
+    }
+
+    // Unsubscribed event types are acknowledged so Razorpay stops retrying.
+    return res.status(200).json({ status: 'ok', action: 'ignored_event' });
   } catch (err) {
     logger.error('webhook error:', { error: err.message, stack: err.stack });
-    // Always return 200 to Razorpay so it doesn't retry indefinitely
-    res.status(200).json({ status: 'error', message: err.message });
+    // Non-2xx on purpose: a 500 makes Razorpay retry, which is the only way a
+    // transient DB blip gets fixed without losing a captured payment.
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// ── GET /payments/my — member-visible payment history ────────────────────────
+// Reconciliation runs here because this is exactly when a member is about to
+// look at their payments or retry checkout — so any stuck capture self-heals at
+// the moment it matters, with no scheduler involved. Bounded and never throws.
+router.get('/my', authenticateToken, async (req, res) => {
+  try {
+    await reconcileForUser(req.user.uid);
+
+    const payments = await Payment.find({ firebaseUid: req.user.uid })
+      .select('razorpayOrderId razorpayPaymentId amount currency plan status capturedAt createdAt')
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    res.json({ payments });
+  } catch (err) {
+    logger.error('payments/my error:', { error: err.message, stack: err.stack });
+    res.status(500).json({ error: 'Failed to fetch payments' });
   }
 });
 

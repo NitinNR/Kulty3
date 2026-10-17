@@ -5,6 +5,7 @@ import { getVenue, getVenues } from '../../services/api';
 import { Navbar } from '../../components/layout/Navbar';
 import { BottomNav } from '../../components/layout/BottomNav';
 import { useAuth } from '../../hooks/useAuth';
+import { isSubscriptionLive } from '../../utils/subscription';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -94,7 +95,7 @@ const SimilarCard = ({ venue, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className="flex-shrink-0 w-44 rounded-2xl overflow-hidden cursor-pointer group"
+      className="flex-shrink-0 w-44 rounded-2xl overflow-hidden cursor-pointer group active:scale-[0.97]"
       style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
     >
       <div className="relative h-32">
@@ -232,7 +233,7 @@ export const VenueDetailPage = () => {
   const meta       = META[cat] || META.other;
   const rating     = stableRating(venue.name);
   const reviews    = stableReviews(venue.name);
-  const isMember   = profile?.subscription?.status === 'active';
+  const isMember   = isSubscriptionLive(profile?.subscription);
   const realImages = venue.images?.filter(Boolean) || [];
   const atmo       = Array.from({ length: 5 }, (_, i) => realImages[i] || null);
   const venueBenefits = (venue.memberBenefits || []).filter(Boolean);

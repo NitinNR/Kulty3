@@ -38,8 +38,11 @@ export const AuthProvider = ({ children }) => {
     return unsubscribe;
   }, []);
 
+  // Returns the fresh profile so callers can assert on it (e.g. waiting for a
+  // webhook to activate a membership). Existing callers ignore the value.
   const refreshProfile = async () => {
-    if (user) await fetchProfile(user);
+    if (user) return await fetchProfile(user);
+    return null;
   };
 
   const logout = async () => {

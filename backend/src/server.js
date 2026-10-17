@@ -25,8 +25,10 @@ import eventsRoutes       from './routes/events.js';
 import entriesRoutes      from './routes/entries.js';
 import paymentsRoutes     from './routes/payments.js';
 import adminRoutes        from './routes/admin.js';
+import adminPaymentsRoutes from './routes/adminPayments.js';
 import applicationsRoutes from './routes/applications.js';
 import citiesRoutes       from './routes/cities.js';
+import settingsRoutes     from './routes/settings.js';
 
 const app = express();
 
@@ -50,11 +52,37 @@ app.use(cors({
 // Access logging — runs before body parsing to capture every request
 app.use(requestLogger);
 
-// Capture raw body for Razorpay webhook signature verification
-app.use(express.json({
-  limit: '10mb',
-  verify: (req, _res, buf) => { req.rawBody = buf; },
-}));
+// ── Razorpay webhook raw-body capture ─────────────────────────────────────────
+// The webhook HMAC is computed over the exact bytes Razorpay signed. The
+// `verify` hook below only fires when Content-Type is application/json, so a
+// dedicated raw parser is mounted on this path to guarantee `req.rawBody` is
+// always a Buffer. The buffer is parsed here so `req.body` stays an object for
+// the route handler.
+const WEBHOOK_PATH = '/api/payments/webhook';
+app.use(
+  WEBHOOK_PATH,
+  express.raw({ type: '*/*', limit: '2mb' }),
+  (req, _res, next) => {
+    req.rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    try {
+      req.body = req.rawBody.length ? JSON.parse(req.rawBody.toString('utf8')) : {};
+    } catch {
+      // Leave body empty; the signature check will reject it downstream.
+      req.body = {};
+    }
+    next();
+  }
+);
+
+// JSON body parser for every other route. No route in this API accepts file
+// uploads or base64 payloads (all media is referenced by URL), so the limit
+// drops from 10mb to 2mb to bound memory use per invocation.
+const jsonParser = express.json({ limit: '2mb' });
+app.use((req, res, next) => {
+  // Stream already consumed by the raw parser mounted above.
+  if (req.path === WEBHOOK_PATH) return next();
+  jsonParser(req, res, next);
+});
 
 // Ensure DB is connected before any route runs (serverless-safe; cached on warm invocations)
 app.use(async (req, res, next) => {
@@ -73,9 +101,11 @@ app.use('/api/venues',       venuesRoutes);
 app.use('/api/events',       eventsRoutes);
 app.use('/api/entries',      entriesRoutes);
 app.use('/api/payments',     paymentsRoutes);
+app.use('/api/admin/payments', adminPaymentsRoutes);
 app.use('/api/admin',        adminRoutes);
 app.use('/api/applications', applicationsRoutes);
 app.use('/api/cities',       citiesRoutes);
+app.use('/api/settings',     settingsRoutes);
 
 app.get('/health', (_req, res) => res.json({ status: 'OK' }));
 
