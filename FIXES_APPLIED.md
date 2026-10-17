@@ -1,5 +1,51 @@
 # 🔧 Fixes Applied
 
+## Phone Login — captcha only when phone auth is enabled
+
+### Problem
+With the new admin toggle, a Google-only setup (phone auth disabled) still initialized the MSG91 widget and rendered the captcha (`h-captcha`) on the login screen.
+
+### Fix
+- **`frontend/src/App.jsx`**
+  - `Msg91CaptchaHost` now also requires `authMethods.phone` (and settings to be loaded, to avoid a flash) before it becomes visible.
+  - App-level MSG91 widget init is skipped until settings are loaded and `authMethods.phone` is true — so on a Google-only setup the widget script/`h-captcha` is never loaded at all.
+- **`frontend/src/pages/auth/LoginPage.jsx`** — the lazy `ensureWidget()` now passes `captchaRenderId`, so if phone auth is enabled mid-session the widget still initializes correctly (previously it relied on the always-on app-level init).
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-BYIEJyYs.js`)
+
+---
+
+## Admin — configurable sign-in methods (Google / Phone)
+
+### Feature
+Admins can now choose which sign-in methods appear on the login screen (Google, Phone/OTP, or both) from **Admin → Login Settings**. At least one method must stay enabled.
+
+### Backend
+- **New `backend/src/models/Settings.js`** — singleton settings document (fixed key `global`) holding `authMethods: { google, phone }`.
+- **New `backend/src/routes/settings.js`**:
+  - `GET /api/settings` (public) → `{ authMethods }`, defaults to both enabled when unset/DB error (fail-open, so login is never locked out).
+  - `PUT /api/settings` (admin only) → validates that at least one method remains enabled, then saves.
+- **`backend/src/server.js`** — mounted `app.use('/api/settings', settingsRoutes)`.
+
+### Frontend
+- **`frontend/src/services/api.js`** — `getPublicSettings()` and `updateSettings(data)`.
+- **New `frontend/src/hooks/useAppSettings.js`** — shared, cached store (`useSyncExternalStore`) for the setting; defaults to both enabled until the API responds / on failure.
+- **New `frontend/src/pages/admin/AdminSettingsPage.jsx`** — two toggle switches + Save, validation, success/error states; pushes the saved values into the shared store so the login screen updates immediately.
+- **`frontend/src/App.jsx`** — route `/admin/settings` (admin-gated).
+- **`frontend/src/pages/admin/AdminDashboard.jsx`** — "Login Settings" quick-action card.
+- **`frontend/src/pages/auth/LoginPage.jsx`** — Google button, the "or use phone" divider, and the phone/OTP block now render conditionally from `authMethods`; the header icon follows the enabled method and a fallback message shows if neither is on.
+
+### Notes
+- Applies to the member login screen (`/login`). The partner login (`/partner`) is Google-only and unchanged.
+- Changing the setting only affects what the login UI offers; it does not revoke existing sessions.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-8Tbyv88z.js`)
+✅ **Backend syntax check passed** (`node --check`)
+
+---
+
 ## Phone Login — stale captcha after logout + captcha always visible
 
 ### Issues

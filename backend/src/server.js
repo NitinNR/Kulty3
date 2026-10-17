@@ -27,6 +27,7 @@ import paymentsRoutes     from './routes/payments.js';
 import adminRoutes        from './routes/admin.js';
 import applicationsRoutes from './routes/applications.js';
 import citiesRoutes       from './routes/cities.js';
+import settingsRoutes     from './routes/settings.js';
 
 const app = express();
 
@@ -76,6 +77,7 @@ app.use('/api/payments',     paymentsRoutes);
 app.use('/api/admin',        adminRoutes);
 app.use('/api/applications', applicationsRoutes);
 app.use('/api/cities',       citiesRoutes);
+app.use('/api/settings',     settingsRoutes);
 
 app.get('/health', (_req, res) => res.json({ status: 'OK' }));
 

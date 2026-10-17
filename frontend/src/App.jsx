@@ -6,6 +6,7 @@ import { ProtectedRoute } from './routes/ProtectedRoute';
 import { RoleRoute } from './routes/RoleRoute';
 import { useAuth } from './hooks/useAuth';
 import { useMsg91Captcha } from './hooks/useMsg91Captcha';
+import { useAppSettings } from './hooks/useAppSettings';
 import {
   initMsg91Widget,
   isMsg91Configured,
@@ -43,6 +44,7 @@ import { AdminEntriesPage } from './pages/admin/AdminEntriesPage';
 import { AdminBillsPage } from './pages/admin/AdminBillsPage';
 import { AdminApplicationsPage } from './pages/admin/AdminApplicationsPage';
 import { AdminCitiesPage } from './pages/admin/AdminCitiesPage';
+import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 
 // Venue owner portal
 import { VenueDashboard } from './pages/venue/VenueDashboard';
@@ -75,9 +77,14 @@ const RootRedirect = () => {
 const Msg91CaptchaHost = () => {
   const { pathname } = useLocation();
   const { verified, step } = useMsg91Captcha();
+  const { loaded: settingsLoaded, authMethods } = useAppSettings();
   const wasVisibleRef = useRef(false);
 
-  const shouldShow = pathname === '/login' && step === 'method' && !verified;
+  // The captcha only matters for phone (OTP) sign-in, so it never shows when the
+  // admin has turned phone auth off. Wait for settings to load so it can't flash
+  // on a Google-only login screen.
+  const shouldShow =
+    settingsLoaded && authMethods.phone && pathname === '/login' && step === 'method' && !verified;
 
   useEffect(() => {
     // Reset only when the captcha transitions into "needed" and isn't already
@@ -106,17 +113,21 @@ const Msg91CaptchaHost = () => {
 };
 
 export default function App() {
+  const { loaded: settingsLoaded, authMethods } = useAppSettings();
+
   // Initialize the MSG91 OTP widget once for the whole page session. It's kept
   // at the app level (not inside LoginPage) so logging in/out never tears it
   // down or re-initializes it — re-initializing would break the widget because
   // MSG91 binds window.sendOtp to the first instance only (see services/msg91).
+  // Skipped entirely while phone sign-in is disabled so we don't load the widget
+  // (or render its captcha) on a Google-only setup.
   useEffect(() => {
-    if (isMsg91Configured()) {
+    if (isMsg91Configured() && settingsLoaded && authMethods.phone) {
       initMsg91Widget({ captchaRenderId: MSG91_CAPTCHA_RENDER_ID }).catch((err) =>
         console.error('MSG91 widget init failed:', err)
       );
     }
-  }, []);
+  }, [settingsLoaded, authMethods.phone]);
 
   return (
     <BrowserRouter>
@@ -173,6 +184,7 @@ const AnimatedRoutes = () => {
             <Route path="/admin/bills" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminBillsPage /></RoleRoute></ProtectedRoute>} />
             <Route path="/admin/applications" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminApplicationsPage /></RoleRoute></ProtectedRoute>} />
             <Route path="/admin/cities" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminCitiesPage /></RoleRoute></ProtectedRoute>} />
+            <Route path="/admin/settings" element={<ProtectedRoute><RoleRoute allowedRoles={['admin']}><AdminSettingsPage /></RoleRoute></ProtectedRoute>} />
 
             {/* Venue owner portal — dashboard/scanner/entries/bills allow staff too */}
             <Route path="/venue" element={<ProtectedRoute><RoleRoute allowedRoles={['venue_owner', 'venue_staff']}><VenueDashboard /></RoleRoute></ProtectedRoute>} />

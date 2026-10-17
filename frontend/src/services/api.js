@@ -82,4 +82,8 @@ export const getAdminCities = ()       => api.get('/cities/admin');
 export const addCity        = (name)   => api.post('/cities', { name });
 export const deleteCity     = (id)     => api.delete(`/cities/${id}`);
 
+// Global app settings — auth methods (public read, admin write)
+export const getPublicSettings = ()       => api.get('/settings');
+export const updateSettings    = (data)   => api.put('/settings', data);
+
 export default api;

@@ -37,7 +37,8 @@ kulty3/
 │       │
 │       ├── 🪝 Custom Hooks
 │       │   ├── useAuth.js            # Auth hook
-│       │   └── useMsg91Captcha.js    # Shared MSG91 captcha state (polled store)
+│       │   ├── useMsg91Captcha.js    # Shared MSG91 captcha state (polled store)
+│       │   └── useAppSettings.js     # Global app settings store (auth methods)
 │       │
 │       ├── 🔗 Services (API & Firebase)
 │       │   ├── firebase.js           # Firebase methods
@@ -101,7 +102,10 @@ kulty3/
 │       │   ├── User.js               # User schema
 │       │   ├── Venue.js              # Venue schema
 │       │   ├── Event.js              # Event schema
-│       │   └── Entry.js              # Entry & bills schema
+│       │   ├── Entry.js              # Entry & bills schema
+│       │   ├── VenueApplication.js   # Venue owner application
+│       │   ├── City.js               # Cities (homepage filter)
+│       │   └── Settings.js           # Singleton app settings (auth methods)
 │       │
 │       ├── 🛡️ Middleware
 │       │   ├── firebaseAuth.js       # Token verification
@@ -118,6 +122,9 @@ kulty3/
 │           ├── events.js             # CRUD /events
 │           ├── entries.js            # Scan, bills, history
 │           ├── payments.js           # Create order, verify
+│           ├── applications.js       # Venue owner applications
+│           ├── cities.js             # Cities (public + admin)
+│           ├── settings.js           # Global settings (public + admin)
 │           └── admin.js              # Dashboard, stats
 │
 └── node_modules/                     # All dependencies (auto-generated)
@@ -133,15 +140,15 @@ kulty3/
 - **Services**: 2 files
 - **Contexts**: 2 files
 - **Routes**: 3 files
-- **Hooks**: 1 file
+- **Hooks**: 3 files
 - **Config**: 3 files
 - **Total**: ~30 files (excluding node_modules)
 
 ### Backend
-- **Models**: 4 files
-- **Routes**: 7 files
+- **Models**: 7 files
+- **Routes**: 10 files
 - **Middleware**: 2 files
-- **Services**: 1 file
+- **Services**: 2 files
 - **Config**: 1 file
 - **Server**: 1 file
 - **Total**: ~16 files (excluding node_modules)
@@ -175,6 +182,7 @@ kulty3/
 - `auth.js` - Profile completion
 - `payments.js` - Razorpay integration
 - `users.js` - User management
+- `settings.js` - Global app settings (auth methods)
 - `admin.js` - Admin statistics
 
 ### Critical Models
@@ -182,6 +190,7 @@ kulty3/
 - `Entry.js` - Entry with bills array
 - `Venue.js` - Venue with ownership
 - `Event.js` - Event details
+- `Settings.js` - Singleton app settings
 
 ---
 
@@ -216,6 +225,7 @@ Required variables:
 - `RAZORPAY_KEY_ID` - Razorpay key
 - `RAZORPAY_KEY_SECRET` - Razorpay secret
 - `MSG91_AUTHKEY` - MSG91 account authkey (server-side token verification)
+- `MSG91_WIDGET_ID` - MSG91 OTP Widget id (public; used for retry/verify)
 
 ### Frontend (.env)
 Required variables:
@@ -272,6 +282,8 @@ Frontend (Display)
 - `/admin/users` - User management
 - `/admin/entries` - Entry logs
 - `/admin/bills` - Bill management
+- `/admin/cities` - Manage cities
+- `/admin/settings` - Login/auth settings
 
 ### Venue Owner Routes (Ready)
 - `/venue/dashboard` - Venue dashboard
@@ -315,6 +327,15 @@ Frontend (Display)
   bills: [{ imageUrl, amount, status, verifiedBy }],
   cashback: { amount, status },
   createdAt
+}
+```
+
+### Settings
+```javascript
+{
+  key: 'global',
+  authMethods: { google: true, phone: true },
+  createdAt, updatedAt
 }
 ```
 
