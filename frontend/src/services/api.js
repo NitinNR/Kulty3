@@ -25,6 +25,11 @@ export const completeProfile = (data) => api.post('/auth/complete-profile', data
 export const getMe = () => api.get('/users/me');
 export const updateProfile = (data) => api.patch('/users/me', data);
 
+// MSG91 OTP widget — resend the OTP and verify it server-side. The backend
+// exchanges MSG91's result for a Firebase custom token.
+export const retryMsg91Otp = (reqId) => api.post('/auth/msg91/retry', { reqId });
+export const verifyMsg91Otp = (reqId, otp) => api.post('/auth/msg91/verify', { reqId, otp });
+
 export const getVenues = (params) => api.get('/venues', { params });
 export const getVenue = (id) => api.get(`/venues/${id}`);
 export const createVenue = (data) => api.post('/venues', data);
@@ -77,5 +82,9 @@ export const getCities      = ()       => api.get('/cities');
 export const getAdminCities = ()       => api.get('/cities/admin');
 export const addCity        = (name)   => api.post('/cities', { name });
 export const deleteCity     = (id)     => api.delete(`/cities/${id}`);
+
+// Global app settings — auth methods (public read, admin write)
+export const getPublicSettings = ()       => api.get('/settings');
+export const updateSettings    = (data)   => api.put('/settings', data);
 
 export default api;
