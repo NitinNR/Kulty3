@@ -17,6 +17,7 @@ import { useAppSettings } from '../../hooks/useAppSettings';
 import { Spinner } from '../../components/common/Spinner';
 import { OtpInput } from '../../components/auth/OtpInput';
 import { useAuth } from '../../hooks/useAuth';
+import { isSubscriptionLive } from '../../utils/subscription';
 
 const DEFAULT_OTP_LENGTH = 6;
 const RESEND_COOLDOWN = 30;
@@ -112,7 +113,7 @@ export const LoginPage = () => {
       navigate('/venue', { replace: true });
     } else if (!profile.name) {
       navigate('/complete-profile', { replace: true });
-    } else if (profile.subscription?.status === 'active') {
+    } else if (isSubscriptionLive(profile.subscription)) {
       // Already a subscribed member — go straight to the app
       navigate('/home', { replace: true });
     } else if (profile.intentRole === 'venue_owner') {

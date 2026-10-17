@@ -337,6 +337,183 @@ Per official docs (`https://docs.msg91.com/otp-widget` and `https://msg91.com/he
 
 ### Build Status
 ✅ **Frontend build successful · Backend syntax check passed**
+## Webhook Self-Test Now Fully Green + Duplicate Payment Indexes Removed
+
+### Issue
+Running `npm run test:webhook` for the first time surfaced two real defects:
+
+1. **Duplicate schema indexes.** `Payment.js` declared `razorpayOrderId` with `unique:true` and `firebaseUid`/`status` with `index:true`, **and** repeated them via `paymentSchema.index({ razorpayOrderId: 1 })` / `{ razorpayPaymentId: 1 }` / `{ firebaseUid: 1, createdAt: -1 }` / `{ status: 1, createdAt: -1 }`. Mongoose logged `Duplicate schema index` warnings on every boot and maintained redundant indexes (extra write cost, doubled index builds).
+2. **A broken assertion in the test itself.** Case 1 "signature over a different body" signed `tampered` and then sent that *same* body — so the signature matched and the server correctly returned 200, failing an assertion that expected 400. The test was wrong, not the server.
+
+### Fix Applied
+- **`backend/src/models/Payment.js`** — removed the `index: true` options on `firebaseUid` and `status`, and removed the two redundant `schema.index()` calls for `razorpayOrderId` and `razorpayPaymentId` (their field-level `unique`/`sparse` definitions already index them). Final indexes: `razorpayOrderId` (unique), `razorpayPaymentId` (sparse), `{ firebaseUid, createdAt }`, `{ status, createdAt }` — covering every query in the codebase with no duplicates.
+- **`backend/test-webhook.mjs`** — the tamper case now signs one body but sends a different one (`signedBody` vs `sentBody`), so it genuinely proves a mismatched signature is rejected.
+
+### Verification
+✅ `cd backend && npm run test:webhook` → **18 passed, 0 failed** (`ALL GREEN`), test data self-cleaned
+✅ Zero `Duplicate schema index` warnings on boot
+✅ `cd backend && npm test` → 15 passed, 0 failed
+
+### Build Status
+✅ **Webhook end-to-end self-test green · No duplicate indexes**
+
+---
+
+## Payment Recovery & Double-Charge Guard — Closing the "Paid But Not Activated" Gap
+
+### Issue
+The previous overhaul added a ledger and made the webhook verify correctly, but two gaps remained:
+
+1. **No recovery for captured-but-unactivated payments.** If the browser closed before `/verify` **and** the webhook never arrived (`RAZORPAY_WEBHOOK_SECRET` still unset, or a delivery failure), money was captured in Razorpay while the ledger row sat at `status:'created'` forever. Nothing ever reconciled it, and nothing told the member.
+2. **A returning member could be charged twice.** `PaymentPage` offered a fresh checkout with no awareness of a prior in-flight order, so a member who had already paid (but not been activated) was invited to pay again.
+
+### Fix Applied
+
+**New file:** `backend/src/services/paymentSettlement.js`
+- Extracted the settlement primitives (`PLANS`, `CURRENCY`, `DEFAULT_PLAN`, `getRazorpay`, `resetRazorpay`, `safeEqual`, `appendEvent`, `activateSubscription`, `resolveUserForOrder`) plus a single `settleCapturedPayment({ orderId, payment, via })`.
+- `/verify`, the webhook, **and** reconciliation now all settle through this one function, so recovery produces byte-for-byte the same end state as a normal payment. Purely a refactor — behaviour preserved (`npm test` still 15/15).
+
+**New file:** `backend/src/services/reconcile.js`
+- `reconcileStuckPayments({ olderThanMinutes, limit, dryRun })` — finds ledger rows at `status:'created'` older than the cutoff, asks Razorpay `orders.fetchPayments(orderId)` for the truth, and:
+  - finds a `captured` payment → settles it via `settleCapturedPayment(..., via:'admin')` (idempotent, so concurrent runs are safe);
+  - finds only `failed` payments → marks the row `failed`;
+  - finds nothing → leaves it `abandoned`.
+- `reconcileForUser(firebaseUid, …)` — the same logic **scoped to one member**, bounded to 3 orders and **never throws**.
+
+**New file:** `backend/src/routes/adminPayments.js` — thin admin/cron surface:
+- `GET|POST /api/admin/payments/reconcile` (query `olderThanMinutes`, `limit`, `dryRun`).
+- `GET /api/admin/payments/stuck` — read-only visibility of stuck orders.
+- Auth accepts **either** `Authorization: Bearer ${CRON_SECRET}` (for a scheduler) **or** a logged-in admin's Firebase token with `role:'admin'`.
+
+**`backend/src/routes/payments.js`**
+- `GET /payments/my` now runs `reconcileForUser(req.user.uid)` **before** returning history. This deliberately puts recovery exactly where it matters — the moment the member opens their payments, which is also the moment `PaymentPage` calls it. No scheduler required, and it works on any Vercel plan (Hobby restricts cron frequency, so a mandatory cron would have been a deploy risk).
+
+**`backend/src/server.js`**
+- Mounts `adminPaymentsRoutes` at `/api/admin/payments` **before** the generic `/api/admin` router.
+
+**New file:** `frontend/src/services/api.js` → `getMyPayments()`.
+
+**`frontend/src/pages/payment/PaymentPage.jsx` — double-charge guard**
+- On load (when not already live) it polls up to 5× (3s apart): calls `getMyPayments()` (which triggers server-side reconcile) **and** re-reads the freshest entitlement via `refreshProfile()`. The profile refresh is essential — otherwise a successful server-side reconcile would leave the local profile stale and the guard would re-offer checkout.
+- If the term became live → redirect to `/payment/success`; if still unsettled after the polls → show an amber "you have a payment we're still confirming" banner and relabel the CTA **"Pay again anyway"**. Fail-open: any error clears the guard so checkout is never blocked.
+- `refreshProfile` is held in a `useRef` (it is re-created on every `AuthProvider` render).
+
+**`backend/.env.example`**
+- Documented optional `CRON_SECRET` and the reconcile endpoints; noted that per-user recovery is automatic.
+
+### Design note
+Recovery is intentionally **lazy and per-user** rather than cron-only: the member returning to the payment page is precisely the moment a stuck capture is dangerous, so settling it there removes the double-charge risk at the source while requiring no scheduler and no plan upgrade. The bulk admin/cron endpoint remains available for a proactive sweep.
+
+### Verification
+✅ `node --check` clean on `payments.js`, `adminPayments.js`, `paymentSettlement.js`, `reconcile.js`, `server.js`
+✅ Full server module graph imports cleanly (`VERCEL=1`)
+✅ `cd backend && npm test` → **15 passed, 0 failed** (refactor is behaviour-neutral)
+✅ `cd frontend && npm run build` → built successfully, no errors
+
+### Build Status
+✅ **Frontend build successful · Backend syntax check passed · Service refactor verified behaviour-neutral**
+
+---
+
+## Payment Security Overhaul — Razorpay Webhook Was Never Verifying Anything
+
+### Issue
+The Razorpay webhook endpoint existed and looked correct, but **had never verified a single event**. `RAZORPAY_WEBHOOK_SECRET` was declared in `backend/.env.example` but never added to `backend/.env`, so every delivery hit the "secret not set" branch, logged an error, and returned **HTTP 200 `{status:'ignored'}`**. Razorpay read that as a successful delivery and stopped retrying.
+
+Confirmed from `backend/logs/`: `POST /api/payments/webhook` = **0 hits** across all 8 log files (including 3 `.gz` archives), while `create-order`/`verify` = 3 hits.
+
+**Impact:** payment verification depended *entirely* on the browser calling `/verify`. If the tab closed, crashed, or lost network after Razorpay captured the money, the member was charged and never activated. No recovery path.
+
+Five further defects were found while tracing the flow end to end:
+
+| # | Severity | Defect |
+|---|---|---|
+| 1 | **Critical** | `/verify` never checked the order belonged to the caller → **free membership for any signed-in user** |
+| 2 | **Critical** | `create-order` wrote `status:'pending'` unconditionally → **active members lost access** the moment renewal checkout opened |
+| 3 | **Critical** | Webhook resolved the payer via the single mutable `subscription.razorpayOrderId` → **delayed webhooks orphaned** once a second order existed |
+| 4 | **High** | Webhook returned HTTP 200 on internal error → DB failures **silently discarded**, no retry |
+| 5 | **High** | `refund.processed` / `charge.dispute.created` unhandled → **refunded members kept access forever** |
+
+Plus: non-constant-time signature comparison, unguarded `rawBody`, unguarded `RAZORPAY_KEY_SECRET`, no currency check, no rate limiting, `plan` request field ignored, and `backend/.env` not excluded from Vercel uploads.
+
+### Fix Applied
+
+**New file:** `backend/src/models/Payment.js`
+- Immutable one-row-per-order ledger: `razorpayOrderId` (unique), `razorpayPaymentId`, `userId`, `firebaseUid`, `amount`, `currency`, `plan`, `status` (`created → captured | failed | partially_refunded | refunded | disputed`), `capturedAt`, `refundedAt`, `refundId`, `disputeId`, `activatedVia`, and an append-only `events[]` audit trail.
+- Indexes on `razorpayOrderId`, `razorpayPaymentId`, `{firebaseUid, createdAt}`, `{status, createdAt}`.
+
+**New file:** `backend/src/utils/subscription.js`
+- `isSubscriptionLive()` / `daysUntilExpiry()` / `nextTermStart()` / `addYears()` — single source of truth for entitlement, so the scan gate and the UI stop disagreeing.
+- `nextTermStart()` extends a live membership from its existing `endDate`, so **renewing early no longer destroys paid-for days**.
+
+**New file:** `backend/test-subscription.mjs` (+ `npm test` in `backend/package.json`)
+- 15 assertions covering expiry boundaries, legacy records with no `endDate`, and renewal chaining. Run with `cd backend && npm test`.
+
+**`backend/src/routes/payments.js`** — rewritten:
+1. **Missing secret → HTTP 500**, not 200. Non-2xx makes Razorpay retry, so events queued during the outage still settle once the secret is added.
+2. **`safeEqual()`** — `crypto.timingSafeEqual` with a length guard replaces `!==` on both `/verify` and the webhook.
+3. **`rawBodyBuffer()`** — normalises Buffer/string/`undefined`; missing raw body returns 400 instead of throwing into the catch.
+4. **Fix #1 — order ownership (Layer 3).** `/verify` now loads the ledger row for the order and requires `paymentDoc.firebaseUid === req.user.uid`, else **403**. This closes the free-membership hole: the `(order_id, payment_id, signature)` triple in the payer's browser is no longer replayable against another account.
+5. **Fix #2 — renewal no longer revokes.** `create-order` only sets `pending` when `!isSubscriptionLive(user.subscription)`.
+6. **Fix #3 — ledger-backed webhook lookup.** `resolveUserForOrder()` queries `Payment` by `razorpayOrderId`, falling back to the legacy `subscription.razorpayOrderId` field so orders created *before* this deploy still settle. New orders no longer overwrite that field.
+7. **Fix #4 — real failures return 500** so Razorpay retries. Only genuinely unrecoverable cases (`user_not_found`) return 200.
+8. **Fix #5 — refunds & disputes.** `refund.processed` marks the ledger `refunded`/`partially_refunded` and revokes the membership only on a **full** refund of the payment currently backing it (partial refunds and superseded payments retain access). `charge.dispute.created` revokes immediately.
+9. **`plan` catalogue** (`PLANS`) replaces the hardcoded `PLAN_AMOUNT`; the request `plan` is whitelisted, never trusted for amount.
+10. **Currency check** added alongside the amount check.
+11. **`membershipId`** widened from 8 to 12 hex chars of the ObjectId (32 → 48 bits) to make `unique`-index collisions negligible. Existing IDs untouched.
+12. **Rate limiting** on `/create-order` (10/min) and `/verify` (20/min), with Map cleanup.
+13. **`RAZORPAY_KEY_SECRET` guarded** before use → 503 with a clear message instead of a 500 TypeError.
+14. **`order.paid` acknowledged but never grants** — it can arrive before capture; only `payment.captured` activates.
+15. **`GET /payments/my`** — member-visible payment history (50 most recent).
+
+**`backend/src/server.js`**
+- The webhook's raw bytes are now captured by a dedicated `express.raw({ type: '*/*' })` mounted on `/api/payments/webhook`, which also JSON-parses the buffer so `req.body` stays an object. The old `express.json({ verify })` hook **only fires for `application/json`**, so any other content type left `rawBody` undefined. The global JSON parser now skips that path.
+- JSON limit tightened `10mb → 2mb` (verified no route accepts uploads or base64 — all media is URL-referenced).
+
+**`backend/src/routes/entries.js`**
+- Scan gate now uses `isSubscriptionLive()` instead of `status === 'active'`, which **ignored `endDate`** — a lapsed membership scanned in forever. Self-heals `status → 'inactive'` on first attempt. A missing `endDate` is still treated as live, so legacy records are unaffected.
+
+**Frontend** — `frontend/src/utils/subscription.js` (new, mirrors the backend helper) plus:
+- `PaymentPage.jsx` — redirects to `/card` only on a **live** term, so a lapsed member can renew. Verification failures now say the payment was received and will activate, instead of implying a retry.
+- `PaymentSuccessPage.jsx` — polls up to 8× until the profile is live before redirecting, showing a "payment received, still confirming" state instead of bouncing into an inactive card screen. Holds `refreshProfile` in a ref because it is re-created on every `AuthProvider` render.
+- `CardPage`, `ProfilePage`, `VenueDetailPage`, `Navbar`, `LoginPage`, `SubscriptionRoute` — entitlement checks switched from `status === 'active'` to `isSubscriptionLive()`. `AdminUsersPage` intentionally still shows the **raw** stored status (admin data view).
+
+**`.vercelignore`** — now excludes `.env*` (with `!.env.example`). Previously only `.gitignore` covered them, so a `vercel --prod` CLI upload would have shipped `backend/.env` — live Razorpay key secret included — inside the function bundle.
+
+**`vercel.json`** — explicit `/api/payments/webhook` rewrite ahead of the generic catch-all.
+
+### Verification
+
+✅ Frontend build successful (495 modules)
+✅ `node --check` clean on all 5 touched backend files; full server module graph imports without error
+✅ **Live webhook test against a running server** (temp secret, port 5099):
+
+| Case | Result |
+|---|---|
+| No signature header | `400 Missing signature header` ✅ |
+| Wrong signature | `400 Invalid webhook signature` ✅ |
+| Valid signature over **tampered** body | `400 Invalid webhook signature` ✅ |
+| Valid signature, `application/json` | `200` — verified ✅ |
+| Valid signature, `text/plain;charset=UTF-8` | `200` — verified ✅ *(old code returned 200 `status:'error'`)* |
+| Valid signature, `application/octet-stream` | `200` — verified ✅ |
+| Valid signature, content-type header omitted | `200` — verified ✅ |
+| `/verify`, `/create-order`, `/payments/my` unauthenticated | `401 No token provided` ✅ |
+
+✅ `cd backend && npm test` → **15 passed, 0 failed**
+
+### ⚠️ ACTION REQUIRED — the webhook is live but not yet configured
+`RAZORPAY_WEBHOOK_SECRET` is still **not set**. Until it is, every webhook returns 500 and no membership is granted via webhook.
+
+In Razorpay Dashboard → **Settings → Webhooks**:
+1. **Webhook URL:** `https://kulty.in/api/payments/webhook`
+2. **Secret:** generate one, then add to `backend/.env` → `RAZORPAY_WEBHOOK_SECRET=<secret>`
+3. **Active events:** `payment.captured`, `payment.failed`, `refund.processed`, `charge.dispute.created`
+4. Set the same secret as a Vercel production env var.
+
+Then confirm delivery: Razorpay Dashboard → Webhooks → the endpoint should show **200** deliveries, and `backend/logs/combined-*.log` will contain `Razorpay webhook event: payment.captured`.
+
+### Build Status
+✅ **Frontend build successful · Backend syntax check passed · Live webhook verification test passed**
 
 ---
 

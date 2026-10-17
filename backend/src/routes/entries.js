@@ -5,6 +5,7 @@ import Venue from '../models/Venue.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import logger from '../config/logger.js';
+import { isSubscriptionLive } from '../utils/subscription.js';
 
 const router = express.Router();
 
@@ -30,7 +31,13 @@ router.post('/scan', authenticateToken, async (req, res) => {
 
     if (!member) return res.status(404).json({ error: 'Member not found. QR code may be invalid.' });
 
-    if (member.subscription?.status !== 'active') {
+    if (!isSubscriptionLive(member.subscription)) {
+      // Self-heal: a lapsed term can still carry status 'active' in the DB,
+      // because nothing ever reconciled `endDate` against the clock.
+      if (member.subscription?.status === 'active') {
+        member.subscription.status = 'inactive';
+        await member.save();
+      }
       return res.status(403).json({ error: 'Membership is inactive or expired' });
     }
 

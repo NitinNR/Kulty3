@@ -4,3 +4,15 @@ frontend/node_modules
 frontend/dist
 *.md
 plan.txt
+
+# Never upload secrets — a CLI deploy would otherwise ship backend/.env
+# (with the live Razorpay key secret) inside the function bundle.
+.env
+.env.*
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+!.env.example
+!backend/.env.example
+!frontend/.env.example
