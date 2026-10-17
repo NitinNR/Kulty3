@@ -25,6 +25,11 @@ export const completeProfile = (data) => api.post('/auth/complete-profile', data
 export const getMe = () => api.get('/users/me');
 export const updateProfile = (data) => api.patch('/users/me', data);
 
+// MSG91 OTP widget — resend the OTP and verify it server-side. The backend
+// exchanges MSG91's result for a Firebase custom token.
+export const retryMsg91Otp = (reqId) => api.post('/auth/msg91/retry', { reqId });
+export const verifyMsg91Otp = (reqId, otp) => api.post('/auth/msg91/verify', { reqId, otp });
+
 export const getVenues = (params) => api.get('/venues', { params });
 export const getVenue = (id) => api.get(`/venues/${id}`);
 export const createVenue = (data) => api.post('/venues', data);

@@ -5,6 +5,7 @@ import { ToastProvider } from './contexts/ToastContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { RoleRoute } from './routes/RoleRoute';
 import { useAuth } from './hooks/useAuth';
+import { initMsg91Widget, isMsg91Configured, MSG91_CAPTCHA_RENDER_ID } from './services/msg91';
 
 // Auth
 import { LoginPage } from './pages/auth/LoginPage';
@@ -57,12 +58,46 @@ const RootRedirect = () => {
   return <Navigate to="/home" replace />;
 };
 
+// Persistent host for MSG91's captcha. It must live at the app root (not inside
+// a route) so it exists before the widget initializes and never unmounts.
+const Msg91CaptchaHost = () => {
+  const { pathname } = useLocation();
+  return (
+    <div
+      id={MSG91_CAPTCHA_RENDER_ID}
+      style={{
+        position: 'fixed',
+        left: '50%',
+        bottom: 16,
+        transform: 'translateX(-50%)',
+        zIndex: 60,
+        // Only relevant on the login screen; hidden elsewhere (the node stays
+        // mounted so the widget's captcha instance is never destroyed).
+        visibility: pathname === '/login' ? 'visible' : 'hidden',
+      }}
+    />
+  );
+};
+
 export default function App() {
+  // Initialize the MSG91 OTP widget once for the whole page session. It's kept
+  // at the app level (not inside LoginPage) so logging in/out never tears it
+  // down or re-initializes it — re-initializing would break the widget because
+  // MSG91 binds window.sendOtp to the first instance only (see services/msg91).
+  useEffect(() => {
+    if (isMsg91Configured()) {
+      initMsg91Widget({ captchaRenderId: MSG91_CAPTCHA_RENDER_ID }).catch((err) =>
+        console.error('MSG91 widget init failed:', err)
+      );
+    }
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
           <AnimatedRoutes />
+          <Msg91CaptchaHost />
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>

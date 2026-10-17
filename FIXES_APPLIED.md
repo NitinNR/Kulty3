@@ -1,5 +1,274 @@
 # 🔧 Fixes Applied
 
+## Phone Login — "Channel not provided in retryOtp()" + OTP verify 502 (verify & resend now server-side)
+
+### Issue
+1. **Resend** failed with `Channel not provided in retryOtp() method.`
+2. **Verify** failed with `Request failed with status code 502`.
+
+### Root Cause (verified against the live MSG91 widget config + `otp-provider.js`)
+- The widget is a **Custom** widget — `widgetType.value === "2"`. For that type the SDK **requires** an explicit `retryChannel`:
+  `retryOtpExposed(n,r,o,s=null){ let u=null; "2"===widgetType&&(u=n); this.retryOtp(u,r,o,s) }`
+  → with `null` it throws *"Channel not provided in retryOtp() method."*
+- The widget also has `captchaValidations: 1`, so the SDK tries to run hCaptcha. Client-side `verifyOtp`/`retryOtp` were additionally fragile (network / proxy 502s surfaced to the UI).
+
+### Fix Applied — verify & resend moved to MSG91's documented widget REST APIs (server-side)
+**Backend `backend/src/services/msg91.js`:**
+- Added `MSG91_RETRY_CHANNEL_SMS = 11` and `retryOtp(reqId, retryChannel=11)` → `POST /api/v5/widget/retryOtp`.
+- Added `verifyOtp(reqId, otp)` → `POST /api/v5/widget/verifyOtp` (returns the JWT access token).
+- `isMsg91Configured()` now also requires `MSG91_WIDGET_ID`.
+
+**Backend `backend/src/routes/auth.js`:**
+- `POST /msg91/verify` now takes `{ reqId, otp }` (was `{ accessToken }`): `verifyOtp` → `verifyAccessToken` → match/create user → `createCustomToken`.
+- New `POST /msg91/retry` takes `{ reqId }` and returns `{ reqId }` (fresh reqId on SMS channel).
+
+**Frontend `services/api.js`:** replaced `verifyMsg91AccessToken` with `retryMsg91Otp(reqId)` and `verifyMsg91Otp(reqId, otp)`.
+
+**Frontend `services/msg91.js`:** removed the widget-based `retryMsg91Otp`/`verifyMsg91Otp`/`extractMsg91Token`. The widget is now used **only for sending** the OTP (it owns the captcha); verify/retry go through the backend.
+
+**Frontend `pages/auth/LoginPage.jsx`:** `handleResendOTP` → `retryMsg91Otp(reqId)`; `handleVerifyOTP` → `verifyMsg91Otp(reqId, otp)` then `signInWithCustomToken`. The client-side access-token exchange is gone.
+
+**Backend `.env` / `.env.example`:** added `MSG91_WIDGET_ID` (public — same value as `VITE_MSG91_WIDGET_ID`).
+
+### Environment note
+`MSG91_AUTHKEY` **and** `MSG91_WIDGET_ID` must both be set. On **Vercel**, add `MSG91_WIDGET_ID` to the backend's environment variables and redeploy. Restart the local backend after editing `.env`.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-BiEPrwuP.js`)
+✅ **Backend syntax check passed** (`node --check`)
+
+---
+
+## Phone Login — OTP boxes now match the widget's OTP length (4 vs 6 digits)
+
+### Issue
+MSG91 sent a **4-digit** code but the UI rendered **6** input boxes, so the code could never be completed.
+
+### Root Cause
+The OTP length was hard-coded (`const OTP_LENGTH = 6`). The widget exposes the real length as `widgetData.otpLength` (verified in `otp-provider.js`, which uses `n.widgetData.otpLength` for its own input `minlength`/`maxlength`).
+
+### Fix Applied
+**File:** `frontend/src/pages/auth/LoginPage.jsx`
+- Replaced the `OTP_LENGTH` constant with a `DEFAULT_OTP_LENGTH = 6` fallback and an `otpLength` state.
+- Added `syncOtpLength()` reading `getMsg91WidgetData()?.otpLength`, called after a successful send/resend.
+- The existing captcha/data poll also syncs `otpLength` once widget data loads.
+- The OTP step now uses `otpLength` for: the "Enter the N-digit code" text, the number of `OtpInput` boxes, and the Verify button's enabled state.
+
+`OtpInput` already re-renders its boxes from the `length` prop, so no change was needed there.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-Dd2ERqTM.js`)
+
+---
+
+## Phone Login — "Sending the OTP timed out" (captcha host must be persistent)
+
+### Issue
+After the previous change removed `captchaRenderId`, tapping **Send OTP** now always failed with `Sending the OTP timed out. Please try again.` (first load, not just after logout).
+
+### Root Cause (verified in `https://verify.msg91.com/otp-provider.js`)
+Captcha **is** enabled for the widget (`widgetData.captchaValidations === true`). In `requestOTP`:
+- `exposeMethods: true` **and** no `captchaRenderId` → MSG91 tries to run the captcha by itself (`this.hcaptchaService.verify()` or `grecaptcha.enterprise.execute(...)`). When that can't complete, it **never calls the success/failure callback** → our 30s timeout fires. (`hcaptchaService` errors only `console.error`, they don't reach our callback.)
+- `exposeMethods: true` **with** a `captchaRenderId` → MSG91 renders the captcha **once at init** into the element with that id (`document.getElementById(id).appendChild(vanillaHCaptcha)`), and the solved token enables sending.
+
+So removing `captchaRenderId` broke sending entirely, and the earlier post-logout hang was because the captcha host lived **inside `LoginPage`** and got unmounted on logout (MSG91 binds to it only once and never re-binds).
+
+### Fix Applied
+Give MSG91 a captcha host that exists **before init** and **never unmounts**.
+
+**File:** `frontend/src/services/msg91.js`
+- Added `MSG91_CAPTCHA_RENDER_ID = 'msg91-captcha'`.
+
+**File:** `frontend/src/App.jsx`
+- Added `Msg91CaptchaHost` — a `position: fixed` element mounted once at the app root (inside `BrowserRouter`), visible only on `/login`, hidden elsewhere via `visibility` (node stays mounted so the captcha instance is never destroyed).
+- `initMsg91Widget({ captchaRenderId: MSG91_CAPTCHA_RENDER_ID })`.
+
+**File:** `frontend/src/pages/auth/LoginPage.jsx`
+- Polls `getMsg91WidgetData()` + `isCaptchaVerified()` to detect when a captcha is required, and gates **Send OTP** until it's solved, with a "complete the verification challenge below" hint.
+
+### Notes
+- Simplest alternative if no captcha is wanted: set the widget's captcha/reCAPTCHA option to **None** in the MSG91 dashboard so `captchaValidations` is `false` (then the host stays empty and Send is never gated).
+- The app must start with the host present; it is rendered by `App` and committed before the init effect runs.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-By-Ef93R.js`)
+
+---
+
+## Phone Login — Logout→Login Fix (widget lifecycle) + OTP UI Revamp
+
+### Issue 1 — "Send OTP" stuck after logout (no page refresh)
+Logging in, then logging out and trying to send an OTP again left the button spinning forever.
+
+### Root Cause (found by inspecting `https://verify.msg91.com/otp-provider.js`)
+- The widget defines `window.sendOtp` / `retryOtp` / `verifyOtp` / `getWidgetData` / `isCaptchaVerified` **once**, as `writable: false, configurable: false`, and **only if they don't already exist** (`!window.hasOwnProperty(...)`).
+- `window.initSendOTP(config)` **removes the existing `<msg91-otp-provider>` element and creates a new one** — but the window globals are **not** rebound, so they keep pointing at the first (now destroyed) component instance.
+- Therefore any re-initialization permanently breaks later OTP calls (callbacks never fire → infinite spinner), and the non-configurable globals can't be deleted.
+
+### Fix Applied
+The widget must be initialized **exactly once for the page lifetime** and never torn down.
+
+**File:** `frontend/src/App.jsx`
+- Added a `useEffect(..., [])` that calls `initMsg91Widget()` once at app start (independent of the login route), so login/logout never destroys or re-initializes it.
+
+**File:** `frontend/src/services/msg91.js`
+- Removed the earlier `resetMsg91Widget()` approach (re-init is actively harmful here).
+- Documented the bind-once constraint on `initMsg91Widget()`.
+- `sendMsg91Otp` / `retryMsg91Otp` / `verifyMsg91Otp` now go through `callWidgetMethod(...)` with a **30s safety timeout**, so a missing callback surfaces a clear error instead of hanging the UI.
+
+**File:** `frontend/src/pages/auth/LoginPage.jsx`
+- Removed the per-mount init + teardown effect; `ensureWidget()` now just awaits the app-level (memoized) init.
+
+### Issue 2 — Captcha
+Captcha is disabled on the widget, and binding a captcha container (`captchaRenderId`) to a route-scoped element is what would get orphaned across login/logout. So captcha handling was removed from the login flow:
+- Deleted `frontend/src/components/auth/Msg91Captcha.jsx`.
+- `initMsg91Widget()` is no longer passed a `captchaRenderId` (defaults to empty).
+- Removed captcha state/gating from `LoginPage`.
+
+### UI Revamp (more attractive + simple)
+**File:** `frontend/src/pages/auth/LoginPage.jsx`
+- Switched to the dark/gold Kulty theme (matches the Partner login page): `#0d0d0d` background with ambient gold glow, rounded card, `KULTY` wordmark.
+- Cleaner two-step flow with an icon header, gold primary buttons, and a divider for "or use phone".
+- OTP step now shows a 6-digit code target and a **Resend countdown** (30s).
+- Auto-verifies as soon as the 6th digit is entered.
+
+**File:** `frontend/src/components/auth/OtpInput.jsx` (new)
+- 6 single-digit boxes with auto-advance, backspace/arrow navigation, paste support, and gold filled/focus states.
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Phone Login — Retry Uses Default Channel (SMS); Captcha Now Disabled
+
+### What
+Per updated requirements: captcha is disabled in the MSG91 widget, and OTP retry should use only the default channel (SMS).
+
+### `frontend/src/services/msg91.js`
+- Removed the unused multi-channel `MSG91_CHANNEL` map (SMS/Voice/Email/WhatsApp).
+- Simplified `retryMsg91Otp(reqId)` — it always passes `null` as `retryChannel`, i.e. the widget's default channel. Confirmed against the MSG91 docs: *"The retryChannel is optional if only one retry method is configured in the widget."* Our widget uses SMS only.
+
+### `frontend/src/pages/auth/LoginPage.jsx`
+- "Resend OTP" now calls `retryMsg91Otp(reqId)` (default/SMS channel).
+
+### Captcha
+- No code change needed. With captcha disabled, `Msg91Captcha` never renders its status card (`rendered` stays `false`), so `captchaBlocking` is always `false` and Send OTP is never gated. The component is kept as a no-op so it works automatically if captcha is re-enabled later.
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Phone Login — Full MSG91 Web SDK (Custom UI) + Captcha UI
+
+### What
+Completed the MSG91 **Web SDK for custom UI** integration per the official docs (section *"How to configure Web SDK Custom UI in OTP widget?"*), covering every exposed method and adding a proper captcha UI.
+
+### `frontend/src/services/msg91.js` (expanded)
+- `initMsg91Widget()` config now follows the doc exactly: `{ widgetId, tokenAuth, identifier, exposeMethods: true, captchaRenderId, success, failure }`. The global `success`/`failure` are no-ops (per the doc's note, we listen to per-method callbacks instead to avoid double events).
+- Full method coverage:
+  - `sendMsg91Otp(identifier)` → `window.sendOtp`
+  - `retryMsg91Otp(channel, reqId)` → `window.retryOtp` (exported `MSG91_CHANNEL` = SMS `'11'`, Voice `'4'`, Email `'3'`, WhatsApp `'12'`; `null` for default config)
+  - `verifyMsg91Otp(otp, reqId)` → `window.verifyOtp`
+  - `getMsg91WidgetData()` → `window.getWidgetData` (logged in dev)
+  - `isCaptchaVerified()` → `window.isCaptchaVerified`
+- `reqId` is now threaded through: taken from the `sendOtp` response (`extractMsg91ReqId`) and passed to `retryOtp`/`verifyOtp` (only appended when present, so the widget's internal session id is used otherwise).
+- Kept readiness handling from the previous fix (`waitForExposedMethods`).
+
+### `frontend/src/components/auth/Msg91Captcha.jsx` (new)
+- Owns the DOM element whose id matches `captchaRenderId` so MSG91 can render its reCAPTCHA.
+- Detects when the captcha actually renders (MutationObserver, checks for the injected iframe) — so it stays invisible when captcha is disabled in the widget.
+- Polls `isCaptchaVerified()` and shows a status card: **"Please tick the box to verify you're human"** → **"Verified — you can continue"**.
+- Reports `{ rendered, verified }` up to the parent.
+
+### `frontend/src/pages/auth/LoginPage.jsx`
+- Initializes the widget on mount (deferred with `setTimeout` so React StrictMode's dev double-mount settles on one stable container) instead of only on button click — so the captcha is visible before the user presses Send.
+- Renders `Msg91Captcha`; **Send OTP is disabled until the captcha is solved** (`captchaBlocking`, only when a captcha is actually rendered and reported unverified).
+- Stores `reqId` from `sendOtp` and passes it to `retryOtp` and `verifyOtp`.
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Phone Login — "MSG91 widget is not ready yet" Fix
+
+### Issue
+Clicking **Send OTP** immediately showed *"MSG91 widget is not ready yet. Please try again."*
+
+### Root Cause
+`initMsg91Widget()` called `window.initSendOTP(config)` and returned right away. But with `exposeMethods: true`, MSG91 attaches `window.sendOtp` / `window.verifyOtp` **asynchronously** (it first fetches the widget configuration from MSG91's API). So `isMsg91Initialized()` was still `false` when `sendMsg91Otp()` ran a moment later, and it rejected.
+
+### Fix Applied
+
+**File:** `frontend/src/services/msg91.js`
+1. Added `waitForExposedMethods()` — polls (100ms, 10s timeout) until both `window.sendOtp` and `window.verifyOtp` exist, then resolves.
+2. `initMsg91Widget()` now `await waitForExposedMethods()` before resolving, so callers know the widget is truly ready.
+3. `loadMsg91Widget()` now verifies `window.initSendOTP` actually exists after the script loads, and resets `scriptPromise`/`widgetInitPromise` on failure so a retry is possible (instead of being stuck on a rejected memoized promise).
+4. On timeout the error is now *"MSG91 widget was not ready in time. Please try again."* — a clearer signal that the widget config/token may be wrong.
+
+### If it still fails
+- Verify `VITE_MSG91_WIDGET_ID` and `VITE_MSG91_AUTH_TOKEN` are set and correct (the **OTP Widget token**, not the account authkey).
+- Confirm the widget is **subscribed to the free plan** and configured for **Mobile** in the MSG91 dashboard.
+- If `success`/`failure` or a blocked request appears in the browser console, the widget may be rejecting the token — check the MSG91 **Logs** section.
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Phone Login — Country Code Dropdown (India-only) + Black Input Text
+
+### Changes
+Following up on the MSG91 OTP integration, the login phone field got a country-code selector and readable (black) input text.
+
+**File:** `frontend/src/pages/auth/LoginPage.jsx`
+1. Added a `COUNTRY_CODES` list rendered as a `<select>` next to the phone input. **Only India (+91) is enabled**; the other countries (US, UK, UAE, Australia) render as `disabled` options labeled `(soon)` — so the selector is clearly a country picker but non-Indian numbers can't be chosen.
+2. `normalizePhone(raw, dialCode)` now takes the selected dial code (defaults to `91`); a 10-digit local number is prefixed with `+91` (without the `+`) for MSG91.
+3. Phone input now accepts digits only, max 10, placeholder "Enter mobile number".
+4. Input **text color fixed** — the app's global `body { color: rgba(255,255,255,0.85) }` made typed values white on the white login card. Added `text-gray-900 placeholder:text-gray-400` to both the phone and OTP inputs.
+5. "OTP sent to …" line now shows the full number (`+91 98765 43210`).
+
+### Build Status
+✅ **Frontend build successful**
+
+---
+
+## Phone Login — MSG91 OTP Widget (Free OTP Widget) Integration
+
+### Feature
+Added phone-number OTP login using MSG91's OTP Widget (Web SDK with **custom UI** / `exposeMethods`), replacing the old Firebase phone auth (which required reCAPTCHA + a Blaze plan). Google login is untouched.
+
+Per official docs (`https://docs.msg91.com/otp-widget` and `https://msg91.com/help/how-to-integrate-the-new-login-with-otp-widget`):
+1. Widget sends OTP → user enters OTP → widget verifies → returns a JWT **access-token**.
+2. Our backend validates that access-token with MSG91's `POST https://control.msg91.com/api/v5/widget/verifyAccessToken` → gets the verified mobile number.
+3. Backend mints a **Firebase custom token** for that phone; the frontend exchanges it via `signInWithCustomToken()` so the whole existing Firebase-based auth/context flow keeps working.
+
+### Files Added
+- `frontend/src/services/msg91.js` — loads `https://verify.msg91.com/otp-provider.js` (fallback `https://verify.phone91.com/otp-provider.js`), initializes the widget with `exposeMethods: true`, and wraps `sendOtp` / `retryOtp` / `verifyOtp` as promises. Also normalizes the success payload (`extractMsg91Token`) and error messages.
+- `backend/src/services/msg91.js` — `verifyAccessToken(accessToken)` calls MSG91's verify-access-token API with the account `authkey` and returns the verified identifier.
+
+### Files Changed
+- `frontend/src/services/firebase.js` — added `signInWithCustomToken()` (imports Firebase's `signInWithCustomToken`, forces a token refresh).
+- `frontend/src/services/api.js` — added `verifyMsg91AccessToken(accessToken)` → `POST /auth/msg91/verify`.
+- `frontend/src/pages/auth/LoginPage.jsx` — re-enabled the phone section: phone input → **Send OTP** (widget) → OTP input → **Verify OTP** → backend → custom token → Firebase session. Added a `#msg91-captcha` container for the widget captcha and a **Resend OTP** action.
+- `backend/src/services/firebaseAdmin.js` — added `createCustomToken(uid, claims)`.
+- `backend/src/routes/auth.js` — added `POST /auth/msg91/verify`: validates env, verifies the access-token, normalizes the phone, reuses an existing user by phone (or creates `msg91_<phone>`), and returns `{ customToken, phone, isNewUser, user }`.
+- `frontend/.env.example` — added `VITE_MSG91_WIDGET_ID`, `VITE_MSG91_AUTH_TOKEN`.
+- `backend/.env.example` — added `MSG91_AUTHKEY`.
+
+### Required Configuration
+- **MSG91 dashboard** (https://control.msg91.com): create an **OTP Widget**, subscribe to the free plan, set contact point = Mobile, and copy the **Widget ID** + generate an **OTP Widget token**.
+- **Frontend env**: `VITE_MSG91_WIDGET_ID`, `VITE_MSG91_AUTH_TOKEN` (the widget token, *not* the account authkey).
+- **Backend env**: `MSG91_AUTHKEY` (account authkey, used server-side only).
+- **Firebase console**: enable **Custom** sign-in under Authentication → Sign-in method (required for `signInWithCustomToken`).
+
+### Build Status
+✅ **Frontend build successful · Backend syntax check passed**
+
+---
+
 ## Homepage Hero Events Stat — Shows Total Event Count, Not Just Upcoming
 
 ### Issue

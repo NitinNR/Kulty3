@@ -40,6 +40,7 @@ kulty3/
 │       │
 │       ├── 🔗 Services (API & Firebase)
 │       │   ├── firebase.js           # Firebase methods
+│       │   ├── msg91.js              # MSG91 OTP Widget client
 │       │   └── api.js                # Axios API client
 │       │
 │       ├── 🛣️ Route Protection
@@ -60,6 +61,9 @@ kulty3/
 │       │   │   ├── Navbar.jsx        # Top navigation
 │       │   │   ├── BottomNav.jsx     # Mobile bottom nav
 │       │   │   └── Sidebar.jsx       # Admin/venue sidebar
+│       │   │
+│       │   ├── auth/                 # Auth helpers
+│       │   │   └── OtpInput.jsx      # 6-digit OTP box input (auto-advance/paste)
 │       │   │
 │       │   └── card/                 # Card component
 │       │       └── MembershipCard.jsx # QR membership card
@@ -103,7 +107,8 @@ kulty3/
 │       │   └── requireRole.js        # Role authorization
 │       │
 │       ├── 🔧 Services
-│       │   └── firebaseAdmin.js      # Firebase admin init
+│       │   ├── firebaseAdmin.js      # Firebase admin init
+│       │   └── msg91.js              # MSG91 access-token verification
 │       │
 │       └── 🛣️ API Routes
 │           ├── auth.js               # POST /auth/complete-profile
@@ -209,6 +214,7 @@ Required variables:
 - `FIREBASE_CLIENT_EMAIL` - Firebase email
 - `RAZORPAY_KEY_ID` - Razorpay key
 - `RAZORPAY_KEY_SECRET` - Razorpay secret
+- `MSG91_AUTHKEY` - MSG91 account authkey (server-side token verification)
 
 ### Frontend (.env)
 Required variables:
@@ -217,6 +223,8 @@ Required variables:
 - `VITE_FIREBASE_PROJECT_ID` - Firebase project
 - `VITE_RAZORPAY_KEY_ID` - Razorpay key
 - `VITE_API_BASE_URL` - Backend API URL
+- `VITE_MSG91_WIDGET_ID` - MSG91 OTP Widget ID
+- `VITE_MSG91_AUTH_TOKEN` - MSG91 OTP Widget token
 
 ---
 
