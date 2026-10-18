@@ -1,5 +1,48 @@
 # 🔧 Fixes Applied
 
+## Captcha moved above the Send OTP button (member + partner login)
+
+### Change
+The MSG91 captcha no longer floats fixed at the bottom of the viewport — it now renders inline **above the "Send OTP" button** on both the member (`/login`) and partner (`/partner`) phones flows.
+
+### Why it's non-trivial
+MSG91 binds its `<h-captcha>` element into the host **once** and never re-binds, so the host node must never unmount. It therefore still lives at the app root (`Msg91CaptchaHost` in `App.jsx`); instead of repositioning it with CSS, the host node is now **physically moved** into a placeholder rendered by the form.
+
+### Frontend
+- **`frontend/src/services/msg91.js`** — new `MSG91_CAPTCHA_ANCHOR_ID` (`msg91-captcha-anchor`) constant for the in-form placeholder.
+- **`frontend/src/App.jsx`** — `Msg91CaptchaHost` renders the persistent host inside an off-screen fallback container and, via an effect keyed on `[shouldShow, pathname, step]`, `appendChild`s it into the login form's anchor while the challenge is needed, or back to the fallback otherwise. Fixed bottom placement removed.
+- **`frontend/src/pages/auth/LoginPage.jsx`** / **`frontend/src/pages/auth/PartnerLoginPage.jsx`** — added `<div id={MSG91_CAPTCHA_ANCHOR_ID} className="flex justify-center overflow-x-auto no-scrollbar" />` directly above the Send OTP button; helper copy now says "…challenge above…" instead of "below".
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-BiFRKPbI.js`)
+
+---
+
+## Partner login — MSG91 phone (OTP) sign-in
+
+### Feature
+The partner/venue-owner login (`/partner`) now offers phone sign-in with the MSG91 OTP widget, matching the member login. The admin **Login Settings** toggle (Google / Phone) now governs both screens.
+
+### Frontend
+- **`frontend/src/pages/auth/PartnerLoginPage.jsx`** — added the full phone flow used by `LoginPage`:
+  - Country-code selector (India only) + mobile input, **Send OTP** button.
+  - OTP step with the shared `OtpInput`, resend (backend SMS retry) with a 30s cooldown, and change-number.
+  - Captcha-aware: Send OTP stays disabled until MSG91's captcha is solved (via `useMsg91Captcha`), and reports each signed-in account as `existingMember` instead of tagging them as a venue owner.
+  - Google button and the "or use phone" divider now render conditionally from `authMethods`; if Google is disabled the partner page still works via phone.
+  - Successful verify mints a Firebase session (`signInWithCustomToken`); the existing routing effect then tags a brand-new account `intentRole: 'venue_owner'` and sends it through the venue-owner onboarding.
+  - "Already signed in" / "account already registered" gate wording generalised (was Google-specific).
+- **`frontend/src/App.jsx`** — the persistent MSG91 captcha host now also shows on `/partner` (`onPhoneAuthScreen = /login || /partner`), step-gated and hidden once verified / on the OTP step.
+- **`frontend/src/pages/admin/AdminSettingsPage.jsx`** — help text updated: the toggle applies to the member **and** partner login screens.
+
+### Notes
+- No backend change required — `POST /auth/msg91/verify` (existing) creates/reuses the user and returns the custom token.
+- Sign-in method setting still only controls what the UI offers; it does not revoke existing sessions.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-DaDusnNx.js`)
+
+---
+
 ## Infinite API loop — `GET /users/me` + `GET /payments/my`
 
 ### Problem

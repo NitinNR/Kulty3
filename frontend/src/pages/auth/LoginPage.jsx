@@ -10,6 +10,7 @@ import {
   extractMsg91ReqId,
   getMsg91ErrorMessage,
   MSG91_CAPTCHA_RENDER_ID,
+  MSG91_CAPTCHA_ANCHOR_ID,
 } from '../../services/msg91';
 import { retryMsg91Otp, verifyMsg91Otp } from '../../services/api';
 import { useMsg91Captcha, setMsg91LoginStep } from '../../hooks/useMsg91Captcha';
@@ -352,6 +353,9 @@ export const LoginPage = () => {
                   />
                 </div>
 
+                {/* MSG91 renders its captcha here (moved in by Msg91CaptchaHost). */}
+                <div id={MSG91_CAPTCHA_ANCHOR_ID} className="flex justify-center overflow-x-auto no-scrollbar" />
+
                 <button
                   onClick={handleSendOTP}
                   disabled={loading || sending || phoneNumber.length !== 10 || (captchaRequired && !captchaOk)}
@@ -363,7 +367,7 @@ export const LoginPage = () => {
 
                 {captchaRequired && !captchaOk && (
                   <p className="text-center text-xs" style={{ color: T.gold }}>
-                    Please complete the verification challenge below to continue.
+                    Please complete the verification challenge above to continue.
                   </p>
                 )}
               </div>

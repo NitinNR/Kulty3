@@ -13,6 +13,7 @@ import {
   isCaptchaVerified,
   resetMsg91Captcha,
   MSG91_CAPTCHA_RENDER_ID,
+  MSG91_CAPTCHA_ANCHOR_ID,
 } from './services/msg91';
 
 // Auth
@@ -72,43 +73,55 @@ const RootRedirect = () => {
 //
 // MSG91 appends its captcha here once and never re-renders it, so we reset it
 // ourselves whenever it becomes needed again (e.g. after logout) to get a fresh
-// challenge. It's also hidden whenever it isn't required: once the user has
-// verified it, and on the OTP step (resends don't need a captcha).
+// challenge. While it's needed we physically move this node into the login
+// form's anchor (right above the "Send OTP" button); otherwise it sits in an
+// off-screen fallback. Moving the node — instead of placing it inside a route —
+// keeps MSG91's one-time binding intact. It's hidden once the user has verified
+// it, and on the OTP step (resends don't need a captcha).
 const Msg91CaptchaHost = () => {
   const { pathname } = useLocation();
   const { verified, step } = useMsg91Captcha();
   const { loaded: settingsLoaded, authMethods } = useAppSettings();
+  const fallbackRef = useRef(null);
+  const hostRef = useRef(null);
   const wasVisibleRef = useRef(false);
 
   // The captcha only matters for phone (OTP) sign-in, so it never shows when the
   // admin has turned phone auth off. Wait for settings to load so it can't flash
-  // on a Google-only login screen.
+  // on a Google-only login screen. Both the member (/login) and partner
+  // (/partner) auth screens can use phone sign-in.
+  const onPhoneAuthScreen = pathname === '/login' || pathname === '/partner';
   const shouldShow =
-    settingsLoaded && authMethods.phone && pathname === '/login' && step === 'method' && !verified;
+    settingsLoaded && authMethods.phone && onPhoneAuthScreen && step === 'method' && !verified;
 
   useEffect(() => {
+    const host = hostRef.current;
+    const fallback = fallbackRef.current;
+    if (!host || !fallback) return;
+
+    // Prefer the login form's inline anchor (above "Send OTP"); fall back to the
+    // off-screen holder when the anchor isn't on screen.
+    const anchor = shouldShow ? document.getElementById(MSG91_CAPTCHA_ANCHOR_ID) : null;
+    const target = anchor || fallback;
+    if (host.parentElement !== target) target.appendChild(host);
+
     // Reset only when the captcha transitions into "needed" and isn't already
     // solved, so we don't wipe a challenge the user is mid-way through.
     if (shouldShow && !wasVisibleRef.current && !isCaptchaVerified()) {
       resetMsg91Captcha();
     }
     wasVisibleRef.current = shouldShow;
-  }, [shouldShow]);
+  }, [shouldShow, pathname, step]);
 
   return (
     <div
-      id={MSG91_CAPTCHA_RENDER_ID}
-      style={{
-        position: 'fixed',
-        left: '50%',
-        bottom: 16,
-        transform: 'translateX(-50%)',
-        zIndex: 60,
-        // The node always stays mounted (the widget's captcha instance must not
-        // be destroyed); only its visibility changes.
-        visibility: shouldShow ? 'visible' : 'hidden',
-      }}
-    />
+      ref={fallbackRef}
+      style={{ position: 'fixed', left: '-10000px', top: 0, zIndex: 60 }}
+    >
+      {/* The node always stays mounted (the widget's captcha instance must not
+          be destroyed); only its position in the tree changes. */}
+      <div ref={hostRef} id={MSG91_CAPTCHA_RENDER_ID} />
+    </div>
   );
 };
 

@@ -32,6 +32,12 @@ export const MSG91_AUTH_TOKEN = import.meta.env.VITE_MSG91_AUTH_TOKEN || '';
 // unmount (that was the cause of the post-logout "Send OTP" hang).
 export const MSG91_CAPTCHA_RENDER_ID = 'msg91-captcha';
 
+// Id of the placeholder the login form renders right above its "Send OTP"
+// button. The persistent captcha node (above) is physically moved into this
+// element while the challenge is needed, so it appears inline above the button
+// instead of floating over the page. See Msg91CaptchaHost in App.jsx.
+export const MSG91_CAPTCHA_ANCHOR_ID = 'msg91-captcha-anchor';
+
 let scriptPromise = null;
 let widgetInitPromise = null;
 
