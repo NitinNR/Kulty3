@@ -1,7 +1,6 @@
 import express from 'express';
 import User from '../models/User.js';
 import Venue from '../models/Venue.js';
-import VenueApplication from '../models/VenueApplication.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import logger from '../config/logger.js';
@@ -21,15 +20,11 @@ router.get('/me', authenticateToken, async (req, res) => {
       await user.save();
     }
 
-    // Self-heal: a user tagged as venue owner who has a completed profile but
-    // never actually submitted an application is treated as a regular member.
-    if (user.intentRole === 'venue_owner' && user.name) {
-      const application = await VenueApplication.findOne({ userId: user._id });
-      if (!application) {
-        user.intentRole = null;
-        await user.save();
-      }
-    }
+    // NOTE: a user tagged `intentRole: 'venue_owner'` keeps that flag even if
+    // they never finish the application — the member login uses it to tell them
+    // a partner account can't sign in as a member. It only becomes irrelevant
+    // once an admin changes their role (e.g. approving the application sets
+    // role to 'venue_owner').
 
     // Auto-promote to venue_staff if email is in any venue's staff list
     if (user.role === 'user' && user.email) {

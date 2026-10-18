@@ -1,5 +1,27 @@
 # 🔧 Fixes Applied
 
+## Block member login for venue-partner accounts (`intentRole`)
+
+### Problem
+A user who started signing up as a venue partner (`/partner`, phone or Google) and left before submitting the application keeps `intentRole: 'venue_owner'` on their user document. If they later open the **member** login (`/login`), they were silently routed into the member app (or the old `/apply-venue` redirect) instead of being told the account is a partner account.
+
+### Change
+The member login now detects `profile.intentRole === 'venue_owner'` (when the account isn't already an admin / venue_owner / venue_staff) and shows a notice instead of signing them in. The backend self-heal that used to silently clear `intentRole` in exactly this case was removed so the flag survives an abandoned application.
+
+### Backend
+- **`backend/src/routes/users.js`** — removed the `GET /me` "self-heal" that nulled `intentRole` when a user had a completed profile but no `VenueApplication` (it also removed the now-unused `VenueApplication` import). `intentRole: 'venue_owner'` now persists for abandoned partner sign-ups until an admin changes the role. Replaced it with an explanatory comment.
+
+### Frontend
+- **`frontend/src/pages/auth/LoginPage.jsx`**
+  - Redirect effect now computes `isPartnerApplicant = intentRole === 'venue_owner' && role not in {admin, venue_owner, venue_staff}`, stores it in `partnerAccount` state, and **returns early** (no member redirect) for those accounts. The stale redirect resets `partnerAccount` when unauthenticated.
+  - New gate screen: "You can't sign in with this account" — explains the identifier is a Kulty venue partner and that a partner account can't be used to log in / sign up as a member. Actions: **Continue venue partner application** (→ `/apply-venue`, or `/complete-profile?next=/apply-venue` if no profile yet) and **Sign out & use another account**.
+  - Added `logout` from `useAuth` and `Building2` / `LogOut` icons.
+
+### Build Status
+✅ Backend `node --check` OK, `npm test` 15/15 · ✅ Frontend build successful (`dist/assets/index-N8CsiyKC.js`)
+
+---
+
 ## Friendly OTP errors + IPBlocked handling (MSG91)
 
 ### Change
