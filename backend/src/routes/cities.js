@@ -2,6 +2,7 @@ import express from 'express';
 import City from '../models/City.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
+import escapeRegex from '../utils/escapeRegex.js';
 
 const router = express.Router();
 
@@ -31,7 +32,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     const name = req.body.name?.trim();
     if (!name) return res.status(400).json({ error: 'City name is required' });
 
-    const exists = await City.findOne({ name: new RegExp(`^${name}$`, 'i') });
+    const exists = await City.findOne({ name: new RegExp(`^${escapeRegex(name)}$`, 'i') });
     if (exists) return res.status(409).json({ error: 'City already exists' });
 
     const city = await City.create({ name });

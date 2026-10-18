@@ -7,6 +7,7 @@ import VenueApplication from '../models/VenueApplication.js';
 import City from '../models/City.js';
 import { authenticateToken } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
+import escapeRegex from '../utils/escapeRegex.js';
 import logger from '../config/logger.js';
 
 const router = express.Router();
@@ -121,7 +122,7 @@ router.patch('/applications/:id/approve', authenticateToken, requireRole(['admin
     // Auto-add the application's city to the cities list if not already present
     let cityAdded = false;
     if (application.city) {
-      const exists = await City.findOne({ name: new RegExp(`^${application.city}$`, 'i') });
+      const exists = await City.findOne({ name: new RegExp(`^${escapeRegex(application.city)}$`, 'i') });
       if (!exists) {
         await City.create({ name: application.city.trim() });
         cityAdded = true;
@@ -160,7 +161,7 @@ router.get('/venues', authenticateToken, requireRole(['admin']), async (req, res
     const { page = 1, limit = 20, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const filter = search
-      ? { $or: [{ name: new RegExp(search, 'i') }, { city: new RegExp(search, 'i') }] }
+      ? { $or: [{ name: new RegExp(escapeRegex(search), 'i') }, { city: new RegExp(escapeRegex(search), 'i') }] }
       : {};
 
     const [venues, total] = await Promise.all([

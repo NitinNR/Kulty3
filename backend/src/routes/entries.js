@@ -106,7 +106,7 @@ router.get('/my', authenticateToken, async (req, res) => {
 
     const [entries, total] = await Promise.all([
       Entry.find({ userId: user._id })
-        .populate('venueId')
+        .populate('venueId', '-staff')
         .sort({ scannedAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -124,6 +124,16 @@ router.get('/venue/:venueId', authenticateToken, requireRole(['venue_owner', 've
   try {
     const { page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // A venue_owner/venue_staff token is not enough on its own — the
+    // requester must belong to *this* venue, otherwise any venue account
+    // could read every other venue's check-in history (IDOR).
+    const scannerEmail = req.userDoc.email?.toLowerCase();
+    const venue = await Venue.findOne({
+      _id: req.params.venueId,
+      $or: [{ ownerId: req.userDoc._id }, { staff: scannerEmail }],
+    });
+    if (!venue) return res.status(403).json({ error: 'Venue not found or not authorized' });
 
     const [entries, total] = await Promise.all([
       Entry.find({ venueId: req.params.venueId })
@@ -177,6 +187,14 @@ router.patch('/:entryId/bills/:billId', authenticateToken, requireRole(['venue_o
     const entry = await Entry.findById(entryId);
     if (!entry) return res.status(404).json({ error: 'Entry not found' });
 
+    // Staff/owner may only approve bills for their own venue (IDOR guard).
+    const scannerEmail = req.userDoc.email?.toLowerCase();
+    const venue = await Venue.findOne({
+      _id: entry.venueId,
+      $or: [{ ownerId: req.userDoc._id }, { staff: scannerEmail }],
+    });
+    if (!venue) return res.status(403).json({ error: 'Not authorized for this venue' });
+
     const bill = entry.bills.id(billId);
     if (!bill) return res.status(404).json({ error: 'Bill not found' });
 
@@ -189,8 +207,7 @@ router.patch('/:entryId/bills/:billId', authenticateToken, requireRole(['venue_o
 
     // Calculate and accumulate cashback when a bill is approved for the first time
     if (status === 'approved' && !wasAlreadyApproved) {
-      const venue = await Venue.findById(entry.venueId);
-      const pct = venue?.cashbackPercentage || 0;
+      const pct = venue.cashbackPercentage || 0;
       if (pct > 0) {
         const earned = Math.round((bill.amount * pct) / 100);
         entry.cashback = {

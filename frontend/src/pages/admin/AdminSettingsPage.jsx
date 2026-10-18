@@ -62,7 +62,7 @@ export const AdminSettingsPage = () => {
         phone: res.data?.authMethods?.phone !== false,
       };
       setAuthMethods(next);
-      setAppAuthMethods(next); // apply immediately on the login screen
+      setAppAuthMethods(next); // apply immediately on the login screens
       setSaved(true);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to save settings');
@@ -84,7 +84,7 @@ export const AdminSettingsPage = () => {
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
           <h2 className="text-sm font-semibold text-gray-700 mb-1">Sign-in methods</h2>
           <p className="text-xs text-gray-400 mb-4">
-            Choose which sign-in options users see on the login screen. At least one must remain enabled.
+            Choose which sign-in options users see on the member and partner login screens. At least one must remain enabled.
           </p>
 
           {loading ? (
@@ -135,7 +135,7 @@ export const AdminSettingsPage = () => {
         </div>
 
         <p className="text-xs text-gray-400 mt-4 text-center">
-          These settings apply to the member login screen.
+          These settings apply to the member and partner login screens.
         </p>
       </div>
     </div>

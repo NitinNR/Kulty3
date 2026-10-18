@@ -32,6 +32,9 @@ import settingsRoutes     from './routes/settings.js';
 
 const app = express();
 
+// Don't advertise the stack in responses.
+app.disable('x-powered-by');
+
 // Allow the deployed frontend origin + localhost in dev
 const allowedOrigins = [
   'https://kulty.in',

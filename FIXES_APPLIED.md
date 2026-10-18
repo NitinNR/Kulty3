@@ -1,5 +1,137 @@
 # 🔧 Fixes Applied
 
+## Block member login for venue-partner accounts (`intentRole`)
+
+### Problem
+A user who started signing up as a venue partner (`/partner`, phone or Google) and left before submitting the application keeps `intentRole: 'venue_owner'` on their user document. If they later open the **member** login (`/login`), they were silently routed into the member app (or the old `/apply-venue` redirect) instead of being told the account is a partner account.
+
+### Change
+The member login now detects `profile.intentRole === 'venue_owner'` (when the account isn't already an admin / venue_owner / venue_staff) and shows a notice instead of signing them in. The backend self-heal that used to silently clear `intentRole` in exactly this case was removed so the flag survives an abandoned application.
+
+### Backend
+- **`backend/src/routes/users.js`** — removed the `GET /me` "self-heal" that nulled `intentRole` when a user had a completed profile but no `VenueApplication` (it also removed the now-unused `VenueApplication` import). `intentRole: 'venue_owner'` now persists for abandoned partner sign-ups until an admin changes the role. Replaced it with an explanatory comment.
+
+### Frontend
+- **`frontend/src/pages/auth/LoginPage.jsx`**
+  - Redirect effect now computes `isPartnerApplicant = intentRole === 'venue_owner' && role not in {admin, venue_owner, venue_staff}`, stores it in `partnerAccount` state, and **returns early** (no member redirect) for those accounts. The stale redirect resets `partnerAccount` when unauthenticated.
+  - New gate screen: "You can't sign in with this account" — explains the identifier is a Kulty venue partner and that a partner account can't be used to log in / sign up as a member. Actions: **Continue venue partner application** (→ `/apply-venue`, or `/complete-profile?next=/apply-venue` if no profile yet) and **Sign out & use another account**.
+  - Added `logout` from `useAuth` and `Building2` / `LogOut` icons.
+
+### Build Status
+✅ Backend `node --check` OK, `npm test` 15/15 · ✅ Frontend build successful (`dist/assets/index-N8CsiyKC.js`)
+
+---
+
+## Friendly OTP errors + IPBlocked handling (MSG91)
+
+### Change
+OTP failures no longer surface raw MSG91 codes (e.g. `IPBlocked`) to users. The backend now maps MSG91/network failures to friendly, client-safe messages with a machine code + HTTP status, and the frontend normalizes anything the widget emits client-side. **`IPBlocked`** gets a dedicated message telling the user to retry in a couple of minutes.
+
+### Backend
+- **`backend/src/services/msg91.js`** — new `postWidget()` wrapper (converts axios network/timeout errors into a friendly `MSG91_UNAVAILABLE` 503) and `msg91Failure()` mapper used by `retryOtp`, `verifyOtp`, `verifyAccessToken`:
+  - IP blocked (`/ip[\s_-]?block/` or "too many otp") → `IP_BLOCKED`, **429**, "Too many OTP requests from your network. Please wait a couple of minutes and then try again."
+  - expired → `OTP_EXPIRED`; incorrect/not-matched → `INVALID_OTP`; bare codes fall back to the caller's friendly message; everything else → `MSG91_ERROR`.
+  - Thrown errors carry `{ message, code, status, expose: true }`; raw internals are never exposed.
+- **`backend/src/routes/auth.js`** — `POST /auth/msg91/retry` and `POST /auth/msg91/verify` now respond with `{ error, code? }` via a new `otpFailure(error, fallback)` helper that honors the service's status (e.g. 429) and only exposes messages flagged `expose`.
+
+### Frontend
+- **`frontend/src/services/msg91.js`** — `getMsg91ErrorMessage()` rewritten to handle widget errors (string / `{message|error|msg}`) **and** axios errors (`response.data.error` + `code`): detects IP-block (message or `IP_BLOCKED` code) → retry-later message, prefers the backend's friendly text, and never shows a bare code (falls back to a generic message).
+- **`frontend/src/pages/auth/LoginPage.jsx`** / **`PartnerLoginPage.jsx`** — `handleResendOTP` / `handleVerifyOTP` now route every error through `getMsg91ErrorMessage` (dropping the raw `err.response.data.error` shortcut) so all three OTP actions show friendly copy consistently.
+
+### Build Status
+✅ Backend `node --check` OK, `npm test` 15/15 · ✅ Frontend build successful (`dist/assets/index-DqigBgln.js`)
+
+---
+
+## Captcha moved above the Send OTP button (member + partner login)
+
+### Change
+The MSG91 captcha no longer floats fixed at the bottom of the viewport — it now renders inline **above the "Send OTP" button** on both the member (`/login`) and partner (`/partner`) phones flows.
+
+### Why it's non-trivial
+MSG91 binds its `<h-captcha>` element into the host **once** and never re-binds, so the host node must never unmount. It therefore still lives at the app root (`Msg91CaptchaHost` in `App.jsx`); instead of repositioning it with CSS, the host node is now **physically moved** into a placeholder rendered by the form.
+
+### Frontend
+- **`frontend/src/services/msg91.js`** — new `MSG91_CAPTCHA_ANCHOR_ID` (`msg91-captcha-anchor`) constant for the in-form placeholder.
+- **`frontend/src/App.jsx`** — `Msg91CaptchaHost` renders the persistent host inside an off-screen fallback container and, via an effect keyed on `[shouldShow, pathname, step]`, `appendChild`s it into the login form's anchor while the challenge is needed, or back to the fallback otherwise. Fixed bottom placement removed.
+- **`frontend/src/pages/auth/LoginPage.jsx`** / **`frontend/src/pages/auth/PartnerLoginPage.jsx`** — added `<div id={MSG91_CAPTCHA_ANCHOR_ID} className="flex justify-center overflow-x-auto no-scrollbar" />` directly above the Send OTP button; helper copy now says "…challenge above…" instead of "below".
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-BiFRKPbI.js`)
+
+---
+
+## Partner login — MSG91 phone (OTP) sign-in
+
+### Feature
+The partner/venue-owner login (`/partner`) now offers phone sign-in with the MSG91 OTP widget, matching the member login. The admin **Login Settings** toggle (Google / Phone) now governs both screens.
+
+### Frontend
+- **`frontend/src/pages/auth/PartnerLoginPage.jsx`** — added the full phone flow used by `LoginPage`:
+  - Country-code selector (India only) + mobile input, **Send OTP** button.
+  - OTP step with the shared `OtpInput`, resend (backend SMS retry) with a 30s cooldown, and change-number.
+  - Captcha-aware: Send OTP stays disabled until MSG91's captcha is solved (via `useMsg91Captcha`), and reports each signed-in account as `existingMember` instead of tagging them as a venue owner.
+  - Google button and the "or use phone" divider now render conditionally from `authMethods`; if Google is disabled the partner page still works via phone.
+  - Successful verify mints a Firebase session (`signInWithCustomToken`); the existing routing effect then tags a brand-new account `intentRole: 'venue_owner'` and sends it through the venue-owner onboarding.
+  - "Already signed in" / "account already registered" gate wording generalised (was Google-specific).
+- **`frontend/src/App.jsx`** — the persistent MSG91 captcha host now also shows on `/partner` (`onPhoneAuthScreen = /login || /partner`), step-gated and hidden once verified / on the OTP step.
+- **`frontend/src/pages/admin/AdminSettingsPage.jsx`** — help text updated: the toggle applies to the member **and** partner login screens.
+
+### Notes
+- No backend change required — `POST /auth/msg91/verify` (existing) creates/reuses the user and returns the custom token.
+- Sign-in method setting still only controls what the UI offers; it does not revoke existing sessions.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-DaDusnNx.js`)
+
+---
+
+## Infinite API loop — `GET /users/me` + `GET /payments/my`
+
+### Problem
+The app was firing both endpoints continuously.
+
+### Root cause
+`AuthContext.fetchProfile` called `setProfile(profileRes.data)` with a **brand-new object on every call**, even when the data was identical. The payment page's double-charge guard (`PaymentPage.jsx`) lists `profile` in its effect deps *and* calls `refreshProfile()` inside its poll loop — so each `setProfile` re-identified `profile`, which restarted the effect, which called `refreshProfile()` again → `getMe()` + `getMyPayments()` forever. `refreshProfile` was also re-created on every provider render, so `PartnerLoginPage`'s effect re-ran on every context render.
+
+### Fix
+- **`frontend/src/contexts/AuthContext.jsx`**
+  - `fetchProfile` now only commits a new `profile` when the data actually changed (JSON compare), so identical refetches no longer re-render and cannot restart `[profile]`-keyed effects.
+  - `refreshProfile` and `logout` wrapped in `useCallback`; the provider value in `useMemo` — stable identities so effects that list them no longer re-run on every render.
+
+### Result
+- Normal payment-page visit: **1×** `/payments/my` + **1×** `/users/me` (was unbounded).
+- With an in-flight order the guard still polls, but is bounded to its 5 attempts.
+
+### Build Status
+✅ **Frontend build successful** (`dist/assets/index-DjIiWo1e.js`)
+
+---
+
+## Security hardening — mass assignment, IDOR, ReDoS, data leakage
+
+### Problems found
+1. **Mass assignment** — `PATCH /users/me` applied `req.body` verbatim (a user could set their own `role`, `subscription`, `membershipId`, …); `POST /applications` spread `...req.body` after `userId` (self-approval / impersonation); venue create/update spread/assigned `req.body` (owner could set `staff`, `ownerId`, `status`).
+2. **IDOR** — `GET /entries/venue/:venueId` and `PATCH /entries/:entryId/bills/:billId` only checked the caller had a venue role, not that they belonged to *that* venue, so any venue account could read/approve another venue's check-ins and bills.
+3. **ReDoS / regex injection** — user-supplied `search` and city values were interpolated straight into `new RegExp(...)` (`venues.js`, `events.js`, `admin.js`, `cities.js`, application→city in `admin.js`).
+4. **Data leakage** — public venue responses exposed the `staff` email list: `GET /venues`, `GET /venues/:id`, venue objects populated by `GET /events`, `GET /events/:id`, `GET /entries/my`, and `GET /users/favorites`.
+5. `x-powered-by` header advertised the stack.
+
+### Fixes
+- **New `backend/src/utils/escapeRegex.js`** — escapes regex metacharacters; applied everywhere untrusted input reaches a `RegExp` (`venues.js`, `events.js`, `admin.js`, `cities.js`).
+- **`backend/src/routes/users.js`** — `PATCH /me` now allow-lists `name`, `profilePhoto`, `intentRole` via `$set`; stripped `-staff` from the favorites venue query.
+- **`backend/src/routes/applications.js`** — `POST /` now picks only `businessName/category/description/city/address/contactPhone`, forces `userId` + `status:'pending'`.
+- **`backend/src/routes/entries.js`** — both venue-scoped routes now verify the caller owns/is staff of `entry.venueId`; the venue lookup is reused for cashback; `GET /my` populates `venueId` with `-staff`.
+- **`backend/src/routes/venues.js`** — content-field allow-list for POST/PUT (`ownerId`/`status` privileged to admin only, `staff` never mass-assignable); public list/detail select `-staff`.
+- **`backend/src/routes/events.js`** — escaped `search`; populated venues select `-staff`.
+- **`backend/src/routes/admin.js`** — escaped admin venue search + application→city lookup.
+- **`backend/src/server.js`** — `app.disable('x-powered-by')`.
+
+### Build Status
+✅ **Backend syntax check passed** (`node --check` on all 9 changed/new files)
+
+---
+
 ## Phone Login — captcha only when phone auth is enabled
 
 ### Problem

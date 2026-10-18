@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Phone, MessageSquare, ArrowLeft } from 'lucide-react';
+import { Phone, MessageSquare, ArrowLeft, Building2, LogOut } from 'lucide-react';
 import { signInWithGoogle, signInWithCustomToken } from '../../services/firebase';
 import {
   initMsg91Widget,
@@ -10,6 +10,7 @@ import {
   extractMsg91ReqId,
   getMsg91ErrorMessage,
   MSG91_CAPTCHA_RENDER_ID,
+  MSG91_CAPTCHA_ANCHOR_ID,
 } from '../../services/msg91';
 import { retryMsg91Otp, verifyMsg91Otp } from '../../services/api';
 import { useMsg91Captcha, setMsg91LoginStep } from '../../hooks/useMsg91Captcha';
@@ -73,8 +74,9 @@ export const LoginPage = () => {
   const [otp, setOtp] = useState('');
   const [reqId, setReqId] = useState('');
   const [cooldown, setCooldown] = useState(0);
+  const [partnerAccount, setPartnerAccount] = useState(false);
   const navigate = useNavigate();
-  const { isAuthenticated, loading: authLoading, profile } = useAuth();
+  const { isAuthenticated, loading: authLoading, profile, logout } = useAuth();
   const widgetReadyRef = useRef(false);
 
   // Captcha requirement / OTP length come from the shared MSG91 store, which
@@ -103,22 +105,32 @@ export const LoginPage = () => {
 
   // Redirect once profile is loaded
   useEffect(() => {
-    if (authLoading || !isAuthenticated) return;
+    if (authLoading) return;
+    if (!isAuthenticated) { setPartnerAccount(false); return; }
 
     if (!profile) return; // still fetching
 
+    // A venue-partner account (started sign-up on /partner → intentRole
+    // 'venue_owner') must not be used to sign in / up on the member side. Flag it
+    // and let the render show a notice instead of routing them into the app.
+    const isPartnerApplicant =
+      profile.intentRole === 'venue_owner' &&
+      profile.role !== 'admin' &&
+      profile.role !== 'venue_owner' &&
+      profile.role !== 'venue_staff';
+
+    setPartnerAccount(isPartnerApplicant);
+    if (isPartnerApplicant) return;
+
     if (profile.role === 'admin') {
       navigate('/admin', { replace: true });
-    } else if (profile.role === 'venue_owner') {
+    } else if (profile.role === 'venue_owner' || profile.role === 'venue_staff') {
       navigate('/venue', { replace: true });
     } else if (!profile.name) {
       navigate('/complete-profile', { replace: true });
     } else if (isSubscriptionLive(profile.subscription)) {
       // Already a subscribed member — go straight to the app
       navigate('/home', { replace: true });
-    } else if (profile.intentRole === 'venue_owner') {
-      // Existing venue applicants (backward compat) stay on the venue flow
-      navigate('/apply-venue', { replace: true });
     } else {
       // New users are members by default — proceed to subscription payment
       navigate('/payment', { replace: true });
@@ -188,7 +200,7 @@ export const LoginPage = () => {
       setOtp('');
       setCooldown(RESEND_COOLDOWN);
     } catch (err) {
-      setError(err?.response?.data?.error || getMsg91ErrorMessage(err, 'Failed to resend OTP. Please try again.'));
+      setError(getMsg91ErrorMessage(err, 'Failed to resend OTP. Please try again.'));
       console.error(err);
     } finally {
       setSending(false);
@@ -213,8 +225,7 @@ export const LoginPage = () => {
       // 2. Exchange for a real Firebase session — AuthContext takes over.
       await signInWithCustomToken(customToken);
     } catch (err) {
-      const apiMessage = err?.response?.data?.error;
-      setError(apiMessage || getMsg91ErrorMessage(err, 'Invalid OTP. Please try again.'));
+      setError(getMsg91ErrorMessage(err, 'Invalid OTP. Please try again.'));
       console.error(err);
       setLoading(false);
     }
@@ -227,11 +238,86 @@ export const LoginPage = () => {
     setCooldown(0);
   };
 
+  const handleSignOut = async () => {
+    try {
+      await logout();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Send the partner applicant back to their venue-owner onboarding.
+  const continuePartnerApplication = () => {
+    navigate(profile?.name ? '/apply-venue' : '/complete-profile?next=/apply-venue');
+  };
+
   // Show spinner while auth is resolving
   if (authLoading || (isAuthenticated && !profile)) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: T.bg }}>
         <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  // Signed in with a venue-partner account → block the member login/signup and
+  // tell the user why, pointing them back to the partner flow.
+  if (isAuthenticated && partnerAccount) {
+    const identifier = profile?.email || profile?.phone || profile?.name || 'this account';
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center px-4 py-10 relative overflow-hidden"
+        style={{ backgroundColor: T.bg }}
+      >
+        <div
+          className="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.16), transparent 70%)' }}
+        />
+        <div className="w-full max-w-md relative animate-fade-in">
+          <div className="rounded-3xl p-7 sm:p-8 shadow-2xl text-center" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+            <div className="flex items-center justify-center gap-1.5 mb-6">
+              <span style={{ fontSize: '8px', color: 'rgba(245,158,11,0.55)', lineHeight: 1 }}>◆</span>
+              <span className="font-display font-bold" style={{ fontSize: '20px', color: T.text, letterSpacing: '0.14em' }}>
+                KULTY
+              </span>
+            </div>
+
+            <div
+              className="w-14 h-14 rounded-2xl mx-auto mb-5 flex items-center justify-center"
+              style={{ backgroundColor: T.goldSoft, border: `1px solid ${T.goldBorder}` }}
+            >
+              <Building2 className="w-6 h-6" style={{ color: T.gold }} />
+            </div>
+
+            <h1 className="text-xl font-bold mb-2" style={{ color: T.text }}>
+              You can't sign in with this account
+            </h1>
+            <p className="text-sm leading-relaxed mb-1" style={{ color: T.muted }}>
+              <strong style={{ color: T.text }}>{identifier}</strong> is registered as a Kulty
+              venue partner. A partner account can't be used to log in or sign up as a member.
+            </p>
+            <p className="text-sm leading-relaxed mb-6" style={{ color: T.muted }}>
+              Continue your venue partner application, or sign out and use a different account.
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={continuePartnerApplication}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-sm transition hover:opacity-90"
+                style={{ backgroundColor: T.gold, color: '#0d0d0d' }}
+              >
+                <Building2 className="w-4 h-4" /> Continue venue partner application
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition hover:bg-white/5"
+                style={{ backgroundColor: T.lite, color: T.text, border: `1px solid ${T.border}` }}
+              >
+                <LogOut className="w-4 h-4" /> Sign out & use another account
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -352,6 +438,9 @@ export const LoginPage = () => {
                   />
                 </div>
 
+                {/* MSG91 renders its captcha here (moved in by Msg91CaptchaHost). */}
+                <div id={MSG91_CAPTCHA_ANCHOR_ID} className="flex justify-center overflow-x-auto no-scrollbar" />
+
                 <button
                   onClick={handleSendOTP}
                   disabled={loading || sending || phoneNumber.length !== 10 || (captchaRequired && !captchaOk)}
@@ -363,7 +452,7 @@ export const LoginPage = () => {
 
                 {captchaRequired && !captchaOk && (
                   <p className="text-center text-xs" style={{ color: T.gold }}>
-                    Please complete the verification challenge below to continue.
+                    Please complete the verification challenge above to continue.
                   </p>
                 )}
               </div>

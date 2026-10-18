@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Venue from '../models/Venue.js';
 import { authenticateToken, optionalAuth } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
+import escapeRegex from '../utils/escapeRegex.js';
 import logger from '../config/logger.js';
 
 const router = express.Router();
@@ -71,7 +72,7 @@ router.get('/', optionalAuth, async (req, res) => {
     }
 
     if (search) {
-      const re = new RegExp(search, 'i');
+      const re = new RegExp(escapeRegex(search), 'i');
       const matchingVenues = await Venue.find({
         $or: [{ name: re }, { city: re }],
       }).select('_id');
@@ -92,7 +93,7 @@ router.get('/', optionalAuth, async (req, res) => {
     }
 
     const events = await Event.find(filter)
-      .populate('venueId')
+      .populate('venueId', '-staff')
       .sort({ date: 1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
@@ -116,7 +117,7 @@ router.get('/', optionalAuth, async (req, res) => {
 // ── Single event ──────────────────────────────────────────────────────────────
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id).populate('venueId');
+    const event = await Event.findById(req.params.id).populate('venueId', '-staff');
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     if (event.status !== effectiveStatus(event)) {

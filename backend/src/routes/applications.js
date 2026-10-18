@@ -24,9 +24,31 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
+    // Only applicant-supplied fields are accepted. `userId`, `status`,
+    // `reviewedBy`/`reviewedAt` are server-controlled — spreading req.body
+    // verbatim let a client self-approve or impersonate another user.
+    const {
+      businessName,
+      category,
+      description,
+      city,
+      address,
+      contactPhone,
+    } = req.body || {};
+
+    if (!businessName) {
+      return res.status(400).json({ error: 'Business name is required' });
+    }
+
     const application = new VenueApplication({
       userId: user._id,
-      ...req.body,
+      businessName,
+      category,
+      description,
+      city,
+      address,
+      contactPhone,
+      status: 'pending',
     });
     await application.save();
     res.status(201).json(application);

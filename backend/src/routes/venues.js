@@ -3,9 +3,30 @@ import Venue from '../models/Venue.js';
 import User from '../models/User.js';
 import { authenticateToken, optionalAuth } from '../middleware/firebaseAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
+import escapeRegex from '../utils/escapeRegex.js';
 import logger from '../config/logger.js';
 
 const router = express.Router();
+
+// Content fields a venue_owner/admin may edit. Server-managed fields (`staff`,
+// `ownerId`, `status`) are excluded so they cannot be mass-assigned from the
+// request body — staff is managed via the dedicated /:id/staff endpoints.
+const VENUE_CONTENT_FIELDS = [
+  'name', 'description', 'category', 'address', 'city',
+  'coordinates', 'images', 'operatingHours', 'amenities',
+  'memberBenefits', 'cashbackPercentage',
+];
+
+// Admin-only fields that may accompany venue content on create/update.
+const VENUE_ADMIN_FIELDS = ['ownerId', 'status'];
+
+const pickVenueFields = (body = {}, extra = []) => {
+  const picked = {};
+  for (const field of [...VENUE_CONTENT_FIELDS, ...extra]) {
+    if (body[field] !== undefined) picked[field] = body[field];
+  }
+  return picked;
+};
 
 router.get('/', optionalAuth, async (req, res) => {
   try {
@@ -13,7 +34,7 @@ router.get('/', optionalAuth, async (req, res) => {
     const filter = { status: 'active' };
 
     if (search) {
-      const re = new RegExp(search, 'i');
+      const re = new RegExp(escapeRegex(search), 'i');
       filter.$or = [
         { name: re },
         { description: re },
@@ -26,9 +47,10 @@ router.get('/', optionalAuth, async (req, res) => {
       filter.category = category.toLowerCase();
     }
 
-    if (city) filter.city = new RegExp(`^${city}$`, 'i');
+    if (city) filter.city = new RegExp(`^${escapeRegex(city)}$`, 'i');
 
     const venues = await Venue.find(filter)
+      .select('-staff')
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
@@ -70,7 +92,7 @@ router.get('/my/venue', authenticateToken, async (req, res) => {
 
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
-    const venue = await Venue.findById(req.params.id);
+    const venue = await Venue.findById(req.params.id).select('-staff');
     if (!venue) return res.status(404).json({ error: 'Venue not found' });
     res.json(venue);
   } catch (error) {
@@ -80,11 +102,10 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
 router.post('/', authenticateToken, requireRole(['admin', 'venue_owner']), async (req, res) => {
   try {
-    const body = { ...req.body };
-    // venue_owner can only create a venue for themselves — ignore any ownerId in body
-    if (req.userDoc.role === 'venue_owner') {
-      body.ownerId = req.userDoc._id;
-    }
+    const isAdmin = req.userDoc.role === 'admin';
+    const body = pickVenueFields(req.body, isAdmin ? VENUE_ADMIN_FIELDS : []);
+    // venue_owner can only create a venue for themselves — ownerId is forced.
+    if (!isAdmin) body.ownerId = req.userDoc._id;
     const venue = new Venue(body);
     await venue.save();
     res.status(201).json(venue);
@@ -99,11 +120,13 @@ router.put('/:id', authenticateToken, requireRole(['admin', 'venue_owner']), asy
     const venue = await Venue.findById(req.params.id);
     if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
-    if (req.userDoc.role === 'venue_owner' && venue.ownerId.toString() !== req.userDoc._id.toString()) {
+    const isAdmin = req.userDoc.role === 'admin';
+    if (!isAdmin && venue.ownerId.toString() !== req.userDoc._id.toString()) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    Object.assign(venue, req.body);
+    const updates = pickVenueFields(req.body, isAdmin ? VENUE_ADMIN_FIELDS : []);
+    Object.assign(venue, updates);
     await venue.save();
     res.json(venue);
   } catch (error) {

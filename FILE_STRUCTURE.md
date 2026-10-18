@@ -119,7 +119,8 @@ kulty3/
 │       │   └── reconcile.js          # Captured-but-unactivated recovery
 │       │
 │       ├── 🧰 Utils
-│       │   └── subscription.js       # Entitlement / renewal math
+│       │   ├── subscription.js       # Entitlement / renewal math
+│       │   └── escapeRegex.js        # Escapes user input before RegExp use (anti-ReDoS)
 │       │
 │       ├── 🧪 Tests (plain node, no framework)
 │       │   ├── test-subscription.mjs # npm test — entitlement math
