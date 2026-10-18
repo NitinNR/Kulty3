@@ -257,9 +257,40 @@ export const extractMsg91ReqId = (data) => {
   return data.reqId || data.requestId || data.message || '';
 };
 
-// Best-effort message extraction from the various error shapes MSG91 returns.
-export const getMsg91ErrorMessage = (error, fallback = 'Something went wrong. Please try again.') => {
+// Best-effort message extraction from the various error shapes MSG91, the widget
+// and our API return. Always yields a user-friendly string (never a raw code).
+//
+// Handled shapes:
+//   - widget failure: a string ("IPBlocked") or { message | error | msg }
+//   - axios failure:  err.response.data.{ error, code } + err.message
+const IP_BLOCK_MESSAGE =
+  'Too many OTP requests. Please wait a couple of minutes and then try again.';
+const GENERIC_MESSAGE = 'Something went wrong. Please try again.';
+
+// A bare identifier like "IPBlocked" / "NumberBlocked" / "OTP_EXPIRED" — not
+// something we should ever show the user.
+const looksLikeCode = (value) => /^[A-Za-z][A-Za-z0-9_-]*$/.test(String(value || '').trim());
+
+export const getMsg91ErrorMessage = (error, fallback = GENERIC_MESSAGE) => {
   if (!error) return fallback;
-  if (typeof error === 'string') return error;
-  return error.message || error.error || error.msg || fallback;
+
+  const responseError = typeof error === 'object' ? error?.response?.data?.error : '';
+  const responseCode = typeof error === 'object' ? error?.response?.data?.code : '';
+  const widgetMessage =
+    typeof error === 'string' ? error : (error?.message || error?.error || error?.msg || '');
+  const code = responseCode || (typeof error === 'object' ? error?.code : '') || '';
+
+  const haystack = `${responseError || ''} ${widgetMessage || ''} ${code}`.toLowerCase();
+  if (/ip[\s_-]?block/.test(haystack) || haystack.includes('too many otp')) {
+    return IP_BLOCK_MESSAGE;
+  }
+
+  // Prefer whatever the backend already decided is safe to show.
+  if (typeof responseError === 'string' && responseError.trim() && !looksLikeCode(responseError)) {
+    return responseError;
+  }
+  if (typeof widgetMessage === 'string' && widgetMessage.trim() && !looksLikeCode(widgetMessage)) {
+    return widgetMessage;
+  }
+  return fallback;
 };

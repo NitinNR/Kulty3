@@ -203,7 +203,7 @@ export const PartnerLoginPage = () => {
       setOtp('');
       setCooldown(RESEND_COOLDOWN);
     } catch (err) {
-      setError(err?.response?.data?.error || getMsg91ErrorMessage(err, 'Failed to resend OTP. Please try again.'));
+      setError(getMsg91ErrorMessage(err, 'Failed to resend OTP. Please try again.'));
       console.error(err);
     } finally {
       setSending(false);
@@ -228,8 +228,7 @@ export const PartnerLoginPage = () => {
       //    effect above routes this new account into the venue owner onboarding.
       await signInWithCustomToken(customToken);
     } catch (err) {
-      const apiMessage = err?.response?.data?.error;
-      setError(apiMessage || getMsg91ErrorMessage(err, 'Invalid OTP. Please try again.'));
+      setError(getMsg91ErrorMessage(err, 'Invalid OTP. Please try again.'));
       console.error(err);
       setLoading(false);
     }

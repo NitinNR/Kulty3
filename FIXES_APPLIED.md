@@ -1,5 +1,26 @@
 # 🔧 Fixes Applied
 
+## Friendly OTP errors + IPBlocked handling (MSG91)
+
+### Change
+OTP failures no longer surface raw MSG91 codes (e.g. `IPBlocked`) to users. The backend now maps MSG91/network failures to friendly, client-safe messages with a machine code + HTTP status, and the frontend normalizes anything the widget emits client-side. **`IPBlocked`** gets a dedicated message telling the user to retry in a couple of minutes.
+
+### Backend
+- **`backend/src/services/msg91.js`** — new `postWidget()` wrapper (converts axios network/timeout errors into a friendly `MSG91_UNAVAILABLE` 503) and `msg91Failure()` mapper used by `retryOtp`, `verifyOtp`, `verifyAccessToken`:
+  - IP blocked (`/ip[\s_-]?block/` or "too many otp") → `IP_BLOCKED`, **429**, "Too many OTP requests from your network. Please wait a couple of minutes and then try again."
+  - expired → `OTP_EXPIRED`; incorrect/not-matched → `INVALID_OTP`; bare codes fall back to the caller's friendly message; everything else → `MSG91_ERROR`.
+  - Thrown errors carry `{ message, code, status, expose: true }`; raw internals are never exposed.
+- **`backend/src/routes/auth.js`** — `POST /auth/msg91/retry` and `POST /auth/msg91/verify` now respond with `{ error, code? }` via a new `otpFailure(error, fallback)` helper that honors the service's status (e.g. 429) and only exposes messages flagged `expose`.
+
+### Frontend
+- **`frontend/src/services/msg91.js`** — `getMsg91ErrorMessage()` rewritten to handle widget errors (string / `{message|error|msg}`) **and** axios errors (`response.data.error` + `code`): detects IP-block (message or `IP_BLOCKED` code) → retry-later message, prefers the backend's friendly text, and never shows a bare code (falls back to a generic message).
+- **`frontend/src/pages/auth/LoginPage.jsx`** / **`PartnerLoginPage.jsx`** — `handleResendOTP` / `handleVerifyOTP` now route every error through `getMsg91ErrorMessage` (dropping the raw `err.response.data.error` shortcut) so all three OTP actions show friendly copy consistently.
+
+### Build Status
+✅ Backend `node --check` OK, `npm test` 15/15 · ✅ Frontend build successful (`dist/assets/index-DqigBgln.js`)
+
+---
+
 ## Captcha moved above the Send OTP button (member + partner login)
 
 ### Change

@@ -9,6 +9,19 @@ const router = express.Router();
 
 const DEFAULT_COUNTRY_CODE = '91';
 
+// Errors thrown by the MSG91 service carry a friendly message + `expose: true`.
+// Anything else is unexpected and shouldn't leak its internals to the client.
+const otpFailure = (error, fallback, defaultStatus = 500) => {
+  const exposed = error?.expose === true;
+  return {
+    status: exposed ? error.status || 400 : defaultStatus,
+    body: {
+      error: exposed && error.message ? error.message : fallback,
+      ...(exposed && error.code ? { code: error.code } : {}),
+    },
+  };
+};
+
 // MSG91 returns identifiers as plain digits (country code + number, no '+')
 const normalizePhone = (identifier) => {
   let digits = String(identifier || '').replace(/\D/g, '');
@@ -35,7 +48,8 @@ router.post('/msg91/retry', async (req, res) => {
     res.json({ message: 'OTP resent', reqId: nextReqId });
   } catch (error) {
     logger.error('MSG91 retry error:', { error: error.message });
-    res.status(400).json({ error: error.message || 'Failed to resend OTP' });
+    const { status, body } = otpFailure(error, 'Failed to resend OTP', 400);
+    res.status(status).json(body);
   }
 });
 
@@ -87,7 +101,8 @@ router.post('/msg91/verify', async (req, res) => {
     });
   } catch (error) {
     logger.error('MSG91 verification error:', { error: error.message, stack: error.stack });
-    res.status(401).json({ error: error.message || 'Phone verification failed' });
+    const { status, body } = otpFailure(error, 'Phone verification failed');
+    res.status(status).json(body);
   }
 });
 
